@@ -19,6 +19,7 @@
     "immer": "^10.1.1",
     "jotai": "^2.12.1",
     "lucide-react": "^0.477.0",
+    "makerjs": "^0.18.1",
     "monaco-editor": "^0.54.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
