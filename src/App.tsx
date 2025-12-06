@@ -1,7 +1,7 @@
 import React from 'react';
 import { AppRoutes } from './routes/AppRoutes';
 
-export const App: React.FC = () => (
+export const App = () => (
   <div className={'center-full'}>
     <AppRoutes />
   </div>

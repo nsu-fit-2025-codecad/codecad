@@ -82,12 +82,7 @@ interface IconProps extends IconBaseProps {
   color?: string;
   className?: string;
 }
-export const Icon: React.FC<IconProps> = ({
-  icon,
-  className = '',
-  color,
-  ...rest
-}) => {
+export const Icon = ({ icon, className = '', color, ...rest }: IconProps) => {
   const Component = Icons[icon];
   const modifiers = match(icon)
     .returnType<string>()
