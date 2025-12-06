@@ -69,7 +69,7 @@ return model;`;
       <button
         onClick={evalInput}
         type="button"
-        className="flex items-center w-fit gap-2 px-4 py-2 text-sm font-medium text-white bg-[#0E639C] hover:bg-[#1177BB] active:bg-[#005A9E] focus:outline-none focus:ring-1 focus:ring-[#007ACC] transition-colors duration-150 rounded-sm"
+        className="flex items-center w-fit gap-2 px-4 py-2 text-sm font-medium text-white bg-[#0E639C] hover:bg-[#1177BB] active:bg-[#005A9E] focus:outline-hidden focus:ring-1 focus:ring-[#007ACC] transition-colors duration-150 rounded-sm"
       >
         ▶ Run
       </button>
