@@ -78,6 +78,8 @@ return model;`;
       </div>
       <ParametersPane
         className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
+        onParameterAdd={() => {}}
+        onParametersEdit={() => {}}
         parameters={[
           {
             name: 'Parameter one',
