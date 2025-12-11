@@ -18,11 +18,15 @@ interface Parameter {
 
 interface ParametersPaneProps {
   parameters: Parameter[];
+  className?: string;
 }
 
-export const ParametersPane = ({ parameters }: ParametersPaneProps) => {
+export const ParametersPane = ({
+  parameters,
+  className,
+}: ParametersPaneProps) => {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>Parameters</CardTitle>
       </CardHeader>
