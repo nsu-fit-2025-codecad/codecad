@@ -4,6 +4,7 @@ import { editor } from 'monaco-editor';
 import IStandaloneCodeEditor = editor.IStandaloneCodeEditor;
 import makerjs from 'makerjs';
 import { ParametersPane } from '@/components/parameters-pane';
+import { useParametersStore } from '@/store/store';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
@@ -50,6 +51,8 @@ const model = {
 
 return model;`;
 
+  const { parameters } = useParametersStore();
+
   return (
     <div className="flex">
       <div className="flex flex-col gap-1">
@@ -80,23 +83,7 @@ return model;`;
         className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
         onParameterAdd={() => {}}
         onParametersEdit={() => {}}
-        parameters={[
-          {
-            name: 'Parameter one',
-            value: 50,
-            onValueChange: () => {},
-          },
-          {
-            name: 'Parameter two',
-            value: 500,
-            onValueChange: () => {},
-          },
-          {
-            name: 'Parameter three',
-            value: 123,
-            onValueChange: () => {},
-          },
-        ]}
+        parameters={parameters}
       />
     </div>
   );
