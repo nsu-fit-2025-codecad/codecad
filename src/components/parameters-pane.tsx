@@ -6,6 +6,8 @@ import {
   FieldTitle,
 } from '@/components/ui/field';
 import { Slider } from '@/components/ui/slider';
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Parameter {
   name: string;
@@ -26,29 +28,31 @@ export const ParametersPane = ({
   className,
 }: ParametersPaneProps) => {
   return (
-    <Card className={className}>
+    <Card className={cn(className, 'flex flex-col overflow-hidden')}>
       <CardHeader>
         <CardTitle>Parameters</CardTitle>
       </CardHeader>
-      <CardContent>
-        <FieldSet>
-          {parameters.map((parameter) => (
-            <Field key={parameter.name}>
-              <FieldTitle>{parameter.name}</FieldTitle>
-              <FieldDescription>{parameter.value}</FieldDescription>
-              <Slider
-                value={[parameter.value]}
-                onValueChange={(values) => parameter.onValueChange(values[0])}
-                min={parameter.min}
-                max={parameter.max}
-                step={parameter.step}
-                className="mt-2 w-full"
-                aria-label={parameter.name}
-              />
-            </Field>
-          ))}
-        </FieldSet>
-      </CardContent>
+      <ScrollArea className="w-full">
+        <CardContent>
+          <FieldSet>
+            {parameters.map((parameter) => (
+              <Field key={parameter.name}>
+                <FieldTitle>{parameter.name}</FieldTitle>
+                <FieldDescription>{parameter.value}</FieldDescription>
+                <Slider
+                  value={[parameter.value]}
+                  onValueChange={(values) => parameter.onValueChange(values[0])}
+                  min={parameter.min}
+                  max={parameter.max}
+                  step={parameter.step}
+                  className="mt-2 w-full"
+                  aria-label={parameter.name}
+                />
+              </Field>
+            ))}
+          </FieldSet>
+        </CardContent>
+      </ScrollArea>
     </Card>
   );
 };
