@@ -31,7 +31,8 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "ts-pattern": "^5.5.0",
-    "wouter": "^3.6.0"
+    "wouter": "^3.6.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.0",
