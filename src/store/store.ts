@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface Parameter {
+export interface Parameter {
   name: string;
   value: number;
   onValueChange: (value: number) => void;
