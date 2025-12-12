@@ -3,6 +3,8 @@ import { Editor } from '@monaco-editor/react';
 import { editor } from 'monaco-editor';
 import IStandaloneCodeEditor = editor.IStandaloneCodeEditor;
 import makerjs from 'makerjs';
+import { ParametersPane } from '@/components/parameters-pane';
+import { useParametersStore } from '@/store/store';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
@@ -49,30 +51,39 @@ const model = {
 
 return model;`;
 
+  const { parameters } = useParametersStore();
+
   return (
-    <div className="flex flex-col gap-1">
-      <h1>HomePage</h1>
-      <h2>Result Model</h2>
-      <div
-        dangerouslySetInnerHTML={{ __html: svg }}
-        className="w-full h-full"
+    <div className="flex">
+      <div className="flex flex-col gap-1">
+        <h1>HomePage</h1>
+        <h2>Result Model</h2>
+        <div
+          dangerouslySetInnerHTML={{ __html: svg }}
+          className="w-full h-full"
+        />
+        <h2>Editor</h2>
+        <Editor
+          className="border-black border"
+          height="30vh"
+          width="40vw"
+          defaultLanguage="javascript"
+          defaultValue={defaultCode}
+          onMount={handleEditorDidMount}
+        />
+        <button
+          onClick={evalInput}
+          type="button"
+          className="flex items-center w-fit gap-2 px-4 py-2 text-sm font-medium text-white bg-[#0E639C] hover:bg-[#1177BB] active:bg-[#005A9E] focus:outline-hidden focus:ring-1 focus:ring-[#007ACC] transition-colors duration-150 rounded-sm"
+        >
+          ▶ Run
+        </button>
+      </div>
+      <ParametersPane
+        className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
+        onParametersEdit={() => {}}
+        parameters={parameters}
       />
-      <h2>Editor</h2>
-      <Editor
-        className="border-black border"
-        height="30vh"
-        width="40vw"
-        defaultLanguage="javascript"
-        defaultValue={defaultCode}
-        onMount={handleEditorDidMount}
-      />
-      <button
-        onClick={evalInput}
-        type="button"
-        className="flex items-center w-fit gap-2 px-4 py-2 text-sm font-medium text-white bg-[#0E639C] hover:bg-[#1177BB] active:bg-[#005A9E] focus:outline-hidden focus:ring-1 focus:ring-[#007ACC] transition-colors duration-150 rounded-sm"
-      >
-        ▶ Run
-      </button>
     </div>
   );
 };
