@@ -1,22 +1,17 @@
-import React, { useRef, useState } from 'react';
-import { editor } from 'monaco-editor';
-import IStandaloneCodeEditor = editor.IStandaloneCodeEditor;
+import React, { useCallback, useEffect, useState } from 'react';
 import makerjs from 'makerjs';
 import { ParametersPane } from '@/components/parameters-pane';
-import { useParametersStore } from '@/store/store';
+import { useEditorStore, useParametersStore } from '@/store/store';
 import { CodeEditor } from '@/components/code-editor';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
-  const editorRef = useRef<IStandaloneCodeEditor | null>(null);
 
-  const handleEditorDidMount = (editor: IStandaloneCodeEditor) => {
-    editorRef.current = editor;
-  };
+  const { parameters } = useParametersStore();
+  const { code, settings } = useEditorStore();
 
-  const evalInput = () => {
-    const value = editorRef.current?.getValue();
-    if (!value) {
+  const evalInput = useCallback(() => {
+    if (!code) {
       return;
     }
     try {
@@ -32,7 +27,7 @@ export const HomePage = () => {
         'makerjs',
         'params',
         `return (function() {
-          ${value}
+          ${code}
         })();`
       );
 
@@ -43,25 +38,15 @@ export const HomePage = () => {
       setSvg(svgString);
     } catch (error) {
       console.error('Error:', error);
-      alert(`Error: ${(error as Error).message}`);
     }
-  };
+  }, [code, parameters]);
 
-  const defaultCode = `const square = new makerjs.models.Square(100);
-
-const circle = new makerjs.models.Ring(50);
-circle.origin = [150, 0];
-
-const model = {
-  models: {
-    square: square,
-    circle: circle
-  }
-};
-
-return model;`;
-
-  const { parameters } = useParametersStore();
+  useEffect(() => {
+    if (!settings.autorun) {
+      return;
+    }
+    evalInput();
+  }, [evalInput, settings.autorun]);
 
   return (
     <div className="flex">
@@ -72,11 +57,7 @@ return model;`;
           dangerouslySetInnerHTML={{ __html: svg }}
           className="w-full h-full"
         />
-        <CodeEditor
-          onExecuteCode={evalInput}
-          onMount={handleEditorDidMount}
-          defaultCode={defaultCode}
-        />
+        <CodeEditor onExecuteCode={evalInput} />
       </div>
       <ParametersPane
         className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
