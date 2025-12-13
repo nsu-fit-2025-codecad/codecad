@@ -20,16 +20,26 @@ export const HomePage = () => {
       return;
     }
     try {
+      const params = parameters.reduce(
+        (acc, param) => {
+          acc[param.name] = param.value;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+
       const createModel = new Function(
         'makerjs',
+        'params',
         `return (function() {
           ${value}
         })();`
       );
 
-      const model = createModel(makerjs);
+      const model = createModel(makerjs, params);
 
       const svgString = makerjs.exporter.toSVG(model);
+
       setSvg(svgString);
     } catch (error) {
       console.error('Error:', error);
