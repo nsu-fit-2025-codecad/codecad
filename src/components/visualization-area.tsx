@@ -10,7 +10,7 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
     <>
       <div
         dangerouslySetInnerHTML={{ __html: svgString }}
-        className="w-full h-full relative"
+        className="relative"
       />
       <CoordinateGrid />
     </>
