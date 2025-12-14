@@ -38,7 +38,7 @@ const addParameterFormSchema = (existingNames: string[]) =>
     value: z.coerce.number<number>(),
     min: z.coerce.number<number>(),
     max: z.coerce.number<number>(),
-    step: z.coerce.number<number>().min(1),
+    step: z.coerce.number<number>().min(0),
   });
 
 type AddParameterFormData = z.infer<ReturnType<typeof addParameterFormSchema>>;
