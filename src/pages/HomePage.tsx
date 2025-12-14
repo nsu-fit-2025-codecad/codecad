@@ -50,6 +50,10 @@ export const HomePage = () => {
           className="w-full h-full"
         />
         <CodeEditor onExecuteCode={evalInput} />
+        <CodeEditor
+          className="fixed bottom-4 left-1/2 -translate-x-1/2"
+          onExecuteCode={evalInput}
+        />
       </div>
       <ParametersPane
         className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
