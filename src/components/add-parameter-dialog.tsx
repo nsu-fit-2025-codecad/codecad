@@ -29,9 +29,9 @@ const addParameterFormSchema = (existingNames: string[]) =>
         (name) => !existingNames.includes(name),
         'Parameter with this name already exists'
       ),
-    value: z.coerce.number<number>().min(1),
-    min: z.coerce.number<number>().min(1),
-    max: z.coerce.number<number>().min(1),
+    value: z.coerce.number<number>(),
+    min: z.coerce.number<number>(),
+    max: z.coerce.number<number>(),
     step: z.coerce.number<number>().min(1),
   });
 
