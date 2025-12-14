@@ -19,20 +19,26 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParametersStore } from '@/store/store';
 import { useState } from 'react';
+import { RESERVED_WORDS } from '@/lib/constants';
 
 const addParameterFormSchema = (existingNames: string[]) =>
   z.object({
     name: z
       .string()
       .min(1, 'Name is required')
+      .regex(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/, 'Invalid variable name format')
+      .refine(
+        (name) => !RESERVED_WORDS.has(name),
+        'Cannot use reserved JavaScript keyword'
+      )
       .refine(
         (name) => !existingNames.includes(name),
         'Parameter with this name already exists'
       ),
-    value: z.coerce.number<number>().min(1),
-    min: z.coerce.number<number>().min(1),
-    max: z.coerce.number<number>().min(1),
-    step: z.coerce.number<number>().min(1),
+    value: z.coerce.number<number>(),
+    min: z.coerce.number<number>(),
+    max: z.coerce.number<number>(),
+    step: z.coerce.number<number>().min(0),
   });
 
 type AddParameterFormData = z.infer<ReturnType<typeof addParameterFormSchema>>;

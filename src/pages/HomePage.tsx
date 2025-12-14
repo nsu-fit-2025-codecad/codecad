@@ -41,7 +41,7 @@ export const HomePage = () => {
   }, [evalInput, settings.autorun]);
 
   return (
-    <div className="flex h-screen w-screen">
+    <div className="flex h-screen w-screen justify-center items-center">
       <VisualizationArea svgString={svg} />
       <CodeEditor
         className="fixed bottom-4 left-1/2 -translate-x-1/2"
