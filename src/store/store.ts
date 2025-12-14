@@ -61,7 +61,7 @@ export const useEditorStore = create<EditorState>()((set) => ({
   code: defaultCode,
   editCode: (newCode) => set((state) => ({ ...state, code: newCode })),
   settings: {
-    autorun: false,
+    autorun: true,
   },
   editSettings: (updates) =>
     set((state) => ({
