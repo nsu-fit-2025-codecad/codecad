@@ -27,7 +27,11 @@ export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
         />
       </CardContent>
       <CardFooter className="pb-3 gap-4">
-        <Button className="cursor-pointer" onClick={onExecuteCode}>
+        <Button
+          className="cursor-pointer"
+          onClick={onExecuteCode}
+          disabled={settings.autorun}
+        >
           ▶ Run
         </Button>
         <Label
