@@ -32,6 +32,7 @@
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.68.0",
     "react-icons": "^5.3.0",
+    "svg-nest": "github:FrankSandqvist/svg-nest",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "ts-pattern": "^5.5.0",

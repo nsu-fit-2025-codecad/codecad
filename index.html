@@ -4,10 +4,37 @@
     <meta charset="UTF-8" />
     <link rel="icon" href='/favicon.ico' />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>App</title>
+    <title>CodeCAD</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- SVGnest с атрибутом async -->
+    <script src="/libs/svgnest.js" async></script>
+    
+    <script>
+      // Проверка загрузки
+      function checkSVGnest() {
+        console.log('Проверка SVGnest...');
+        
+        if (typeof window.SVGnest !== 'undefined') {
+          console.log('✅ SVGnest загружен!', window.SVGnest);
+          return true;
+        } else {
+          console.log('❌ SVGnest НЕ загружен');
+          console.log('Проверьте путь к файлу: /libs/svgnest.js');
+          return false;
+        }
+      }
+      
+      // Проверяем через 1 секунду после загрузки
+      window.addEventListener('load', () => {
+        setTimeout(checkSVGnest, 1000);
+      });
+      
+      // Проверяем каждые 2 секунды
+      setInterval(checkSVGnest, 2000);
+    </script>
   </body>
 </html>
