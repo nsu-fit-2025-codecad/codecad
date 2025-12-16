@@ -1,4 +1,3 @@
-import { CoordinateGrid } from '@/components/coordinate-grid';
 import React, { useRef } from 'react';
 import { usePanZoom } from '@/hooks/usePanZoom';
 
@@ -22,7 +21,6 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0) {
-      // Левая кнопка мыши
       startPan(e);
     }
   };
@@ -33,13 +31,6 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
 
   const handleDoubleClick = () => {
     resetTransform();
-  };
-
-  // Функция для динамического обновления сетки в зависимости от масштаба
-  const getGridPatternSize = () => {
-    // Базовый размер сетки 20px, масштабируем его с учетом зума
-    const baseSize = 20;
-    return Math.max(5, baseSize / transform.scale);
   };
 
   return (
@@ -55,13 +46,6 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
         onWheel={handleWheel}
         onDoubleClick={handleDoubleClick}
       >
-        <div style={getSvgStyle()}>
-          <CoordinateGrid
-            patternSize={getGridPatternSize()}
-            opacity={0.5 + 0.5 / transform.scale} // Динамическая прозрачность
-          />
-        </div>
-
         <div
           dangerouslySetInnerHTML={{ __html: svgString }}
           style={getSvgStyle()}
