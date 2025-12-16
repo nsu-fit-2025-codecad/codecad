@@ -260,3 +260,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+.pan-zoom-container {
+  transition: cursor 0.1s ease;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.smooth-transform {
+  transition: transform 0.1s ease-out;
+}
+
+.grab-cursor {
+  cursor: grab;
+}
+
+.grabbing-cursor {
+  cursor: grabbing;
+}
+
+.grid-line {
+  transition: stroke-opacity 0.2s ease;
+}

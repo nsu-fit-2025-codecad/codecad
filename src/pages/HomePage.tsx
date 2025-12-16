@@ -41,14 +41,14 @@ export const HomePage = () => {
   }, [evalInput, settings.autorun]);
 
   return (
-    <div className="flex h-screen w-screen justify-center items-center">
+    <div className="relative h-screen w-screen bg-gray-50">
       <VisualizationArea svgString={svg} />
       <CodeEditor
-        className="fixed bottom-4 left-1/2 -translate-x-1/2"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10"
         onExecuteCode={evalInput}
       />
       <ParametersPane
-        className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)]"
+        className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
         onParametersEdit={() => {}}
         parameters={parameters}
       />
