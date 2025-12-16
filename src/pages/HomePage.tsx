@@ -42,12 +42,7 @@ export const HomePage = () => {
 
   return (
     <div className="relative h-screen w-screen bg-gray-50">
-      {/* Область визуализации с панорамированием */}
-      <div className="absolute inset-0 p-4">
-        <VisualizationArea svgString={svg} />
-      </div>
-      
-      {/* Остальные компоненты */}
+      <VisualizationArea svgString={svg} />
       <CodeEditor
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10"
         onExecuteCode={evalInput}
