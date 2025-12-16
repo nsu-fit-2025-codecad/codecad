@@ -52,7 +52,7 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
         />
       </div>
 
-      <div className="absolute top-2 left-2 text-xs bg-black/70 text-white px-2 py-1 rounded">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xs bg-black/70 text-white px-2 py-1 rounded">
         X: {Math.round(transform.x)} Y: {Math.round(transform.y)} Zoom:{' '}
         {Math.round(transform.scale * 100)}%
       </div>
