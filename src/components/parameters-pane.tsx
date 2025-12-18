@@ -11,18 +11,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddParameterDialog } from '@/components/add-parameter-dialog';
 import { Parameter } from '@/store/store';
 import { Button } from '@/components/ui/button';
+import { useParametersStore } from '@/store/store';
 
 interface ParametersPaneProps {
-  parameters: Parameter[];
+  //parameters: Parameter[];
   onParametersEdit: () => void;
   className?: string;
 }
 
 export const ParametersPane = ({
-  parameters,
+  //parameters,
   onParametersEdit,
   className,
 }: ParametersPaneProps) => {
+  const { parameters, updateValue } = useParametersStore();
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>
       <CardHeader>
@@ -43,7 +45,9 @@ export const ParametersPane = ({
                 <FieldDescription>{parameter.value}</FieldDescription>
                 <Slider
                   value={[parameter.value]}
-                  onValueChange={(values) => parameter.onValueChange(values[0])}
+                  onValueChange={(values) =>
+                    updateValue(parameter.name, values[0])
+                  }
                   min={parameter.min}
                   max={parameter.max}
                   step={parameter.step}

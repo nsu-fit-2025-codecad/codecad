@@ -44,6 +44,7 @@ export const HomePage = () => {
       setSvg(svgString);
     } catch (error) {
       console.error('Error:', error);
+      setSvg('');
     }
   }, [update, code, parameters]);
 
@@ -52,7 +53,7 @@ export const HomePage = () => {
       return;
     }
     evalInput();
-  }, [evalInput, settings.autorun]);
+  }, [evalInput, settings.autorun, code, parameters]);
 
   const runNesting = () => {
     if (!model) {
@@ -100,7 +101,7 @@ export const HomePage = () => {
       <ParametersPane
         className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
         onParametersEdit={() => {}}
-        parameters={parameters}
+        //parameters={parameters}
       />
     </div>
   );
