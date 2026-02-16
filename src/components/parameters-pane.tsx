@@ -9,26 +9,36 @@ import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddParameterDialog } from '@/components/add-parameter-dialog';
-import { Parameter } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { useParametersStore } from '@/store/store';
+import { X } from 'lucide-react';
 
 interface ParametersPaneProps {
-  //parameters: Parameter[];
   onParametersEdit: () => void;
+  onClose: () => void;
   className?: string;
 }
 
 export const ParametersPane = ({
-  //parameters,
   onParametersEdit,
+  onClose,
   className,
 }: ParametersPaneProps) => {
   const { parameters, updateValue } = useParametersStore();
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>
-      <CardHeader>
-        <CardTitle>Parameters</CardTitle>
+      <CardHeader className="gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>Parameters</CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="cursor-pointer"
+          >
+            <X />
+          </Button>
+        </div>
         <div className="flex gap-4">
           <AddParameterDialog />
           <Button className="flex-1" onClick={onParametersEdit}>
@@ -52,7 +62,6 @@ export const ParametersPane = ({
                   max={parameter.max}
                   step={parameter.step}
                   className="mt-2 w-full"
-                  aria-label={parameter.name}
                 />
               </Field>
             ))}
