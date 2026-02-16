@@ -16,8 +16,8 @@ export const usePanesStore = create<PanesState>()((set) => ({
   isParametersPaneOpen: true,
   openModelsPane: () => set({ isModelsPaneOpen: true }),
   openParametersPane: () => set({ isParametersPaneOpen: true }),
-  closeModelsPane: () => set(() => ({ isModelsPaneOpen: false })),
-  closeParametersPane: () => set(() => ({ isParametersPaneOpen: false })),
+  closeModelsPane: () => set({ isModelsPaneOpen: false }),
+  closeParametersPane: () => set({ isParametersPaneOpen: false }),
   toggleModelsPane: () =>
     set((state) => ({ isModelsPaneOpen: !state.isModelsPaneOpen })),
   toggleParametersPane: () =>
