@@ -8,6 +8,8 @@ import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
 import { packModelsIntoNestingArea } from '@/lib/nesting';
+import { Toolbar } from '@/components/toolbar';
+import { usePanesStore } from '@/store/panes-store';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
@@ -16,6 +18,12 @@ export const HomePage = () => {
   const { parameters } = useParametersStore();
   const { update, updateFitStatus } = useModelsStore();
   const { code, settings } = useEditorStore();
+  const {
+    isModelsPaneOpen,
+    isParametersPaneOpen,
+    closeModelsPane,
+    closeParametersPane,
+  } = usePanesStore();
 
   const evalInput = useCallback(() => {
     if (!code) {
@@ -90,19 +98,25 @@ export const HomePage = () => {
   return (
     <div className="relative h-screen w-screen bg-gray-50">
       <VisualizationArea svgString={svg} />
-      <ModelsPane
-        className="fixed left-4 w-80 top-4 h-[calc(100vh-2rem)]"
-        onRunNesting={runNesting}
-      />
+      <Toolbar className="fixed top-14 left-1/2 -translate-x-1/2 z-30" />
+      {isModelsPaneOpen && (
+        <ModelsPane
+          className="fixed left-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
+          onRunNesting={runNesting}
+          onClose={closeModelsPane}
+        />
+      )}
       <CodeEditor
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10"
         onExecuteCode={evalInput}
       />
-      <ParametersPane
-        className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
-        onParametersEdit={() => {}}
-        //parameters={parameters}
-      />
+      {isParametersPaneOpen && (
+        <ParametersPane
+          className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
+          onParametersEdit={() => {}}
+          onClose={closeParametersPane}
+        />
+      )}
     </div>
   );
 };

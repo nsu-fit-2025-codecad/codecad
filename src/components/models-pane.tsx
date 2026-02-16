@@ -11,19 +11,36 @@ import {
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
+import React from 'react';
 
 interface ModelsPaneProps {
   onRunNesting: () => void;
+  onClose: () => void;
   className?: string;
 }
 
-export const ModelsPane = ({ onRunNesting, className }: ModelsPaneProps) => {
+export const ModelsPane = ({
+  onRunNesting,
+  onClose,
+  className,
+}: ModelsPaneProps) => {
   const { models } = useModelsStore();
 
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>
-      <CardHeader>
-        <CardTitle>Models</CardTitle>
+      <CardHeader className="gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>Models</CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="cursor-pointer"
+          >
+            <X />
+          </Button>
+        </div>
         <Button className="cursor-pointer" onClick={onRunNesting}>
           Run Nesting
         </Button>
@@ -32,7 +49,7 @@ export const ModelsPane = ({ onRunNesting, className }: ModelsPaneProps) => {
         <CardContent>
           <ItemGroup>
             {models.map((model, index) => (
-              <>
+              <React.Fragment key={model.id}>
                 <Item key={model.id} className="px-0">
                   <ItemHeader>
                     <ItemTitle
@@ -49,7 +66,7 @@ export const ModelsPane = ({ onRunNesting, className }: ModelsPaneProps) => {
                   </ItemContent>
                 </Item>
                 {index !== models.length - 1 && <ItemSeparator />}
-              </>
+              </React.Fragment>
             ))}
           </ItemGroup>
         </CardContent>
