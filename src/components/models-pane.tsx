@@ -50,7 +50,7 @@ export const ModelsPane = ({
           <ItemGroup>
             {models.map((model, index) => (
               <React.Fragment key={model.id}>
-                <Item key={model.id} className="px-0">
+                <Item className="px-0">
                   <ItemHeader>
                     <ItemTitle
                       className={cn(
