@@ -1,6 +1,5 @@
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Editor } from '@monaco-editor/react';
-import React, { useState } from 'react';
+import React from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -13,32 +12,38 @@ interface CodeEditorProps {
 }
 
 export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
-  const [visible, setVisible] = useState(true);
-
   const { code, editCode, settings, editSettings } = useEditorStore();
 
-  return visible ? (
-    <Card className={cn(className)}>
-      <CardContent className="pt-12">
-        <Editor
-          height="30vh"
-          width="40vw"
-          defaultLanguage="javascript"
-          value={code}
-          onChange={editCode}
-        />
-      </CardContent>
-      <CardFooter className={cn('pb-3 gap-4', !visible && 'pt-3')}>
+  return (
+    <div
+      className={cn(className, 'flex h-full w-full flex-col overflow-hidden')}
+    >
+      <div className="min-h-0 flex-1 bg-white">
+        <div className="h-full w-full">
+          <Editor
+            height="100%"
+            width="100%"
+            defaultLanguage="javascript"
+            value={code}
+            onChange={editCode}
+            options={{
+              automaticLayout: true,
+              minimap: { enabled: false },
+            }}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-3 border-t bg-white px-4 py-3">
         <Button
           className="cursor-pointer"
           onClick={onExecuteCode}
           disabled={settings.autorun}
         >
-          ▶ Run
+          Run
         </Button>
         <Label
           className={cn(
-            'flex cursor-pointer',
+            'flex cursor-pointer items-center gap-2',
             buttonVariants({ variant: 'outline' })
           )}
         >
@@ -50,22 +55,7 @@ export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
           />
           <p>Autorun</p>
         </Label>
-        <Button
-          className="ml-auto cursor-pointer"
-          variant="outline"
-          onClick={() => setVisible(false)}
-        >
-          Hide
-        </Button>
-      </CardFooter>
-    </Card>
-  ) : (
-    <Button
-      className={cn(className, 'cursor-pointer')}
-      variant="outline"
-      onClick={() => setVisible(true)}
-    >
-      Show Editor
-    </Button>
+      </div>
+    </div>
   );
 };

@@ -2,14 +2,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import makerjs, { IModel } from 'makerjs';
 import { ParametersPane } from '@/components/parameters-pane';
 import { useEditorStore, useParametersStore } from '@/store/store';
-import { CodeEditor } from '@/components/code-editor';
-import { VisualizationArea } from '@/components/visualization-area';
 import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
 import { packModelsIntoNestingArea } from '@/lib/nesting';
 import { Toolbar } from '@/components/toolbar';
 import { usePanesStore } from '@/store/panes-store';
+import { WorkbenchLayout } from '@/components/workbench-layout';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
@@ -96,8 +95,8 @@ export const HomePage = () => {
   };
 
   return (
-    <div className="relative h-screen w-screen bg-gray-50">
-      <VisualizationArea svgString={svg} />
+    <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
+      <WorkbenchLayout svgString={svg} onExecuteCode={evalInput} />
       <Toolbar className="fixed top-14 left-1/2 -translate-x-1/2 z-30" />
       {isModelsPaneOpen && (
         <ModelsPane
@@ -106,10 +105,6 @@ export const HomePage = () => {
           onClose={closeModelsPane}
         />
       )}
-      <CodeEditor
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10"
-        onExecuteCode={evalInput}
-      />
       {isParametersPaneOpen && (
         <ParametersPane
           className="fixed right-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
