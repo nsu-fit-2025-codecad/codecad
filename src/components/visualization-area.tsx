@@ -1,12 +1,21 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { usePanZoom } from '@/hooks/usePanZoom';
+import { highlightSelectedModelInSvg } from '@/lib/svg-highlight';
 
 interface VisualizationAreaProps {
   svgString: string;
+  selectedModelId: string | null;
 }
 
-export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
+export const VisualizationArea = ({
+  svgString,
+  selectedModelId,
+}: VisualizationAreaProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const highlightedSvg = useMemo(
+    () => highlightSelectedModelInSvg(svgString, selectedModelId),
+    [selectedModelId, svgString]
+  );
 
   const {
     getContainerStyle,
@@ -47,7 +56,7 @@ export const VisualizationArea = ({ svgString }: VisualizationAreaProps) => {
         onDoubleClick={handleDoubleClick}
       >
         <div
-          dangerouslySetInnerHTML={{ __html: svgString }}
+          dangerouslySetInnerHTML={{ __html: highlightedSvg }}
           style={getSvgStyle()}
         />
       </div>
