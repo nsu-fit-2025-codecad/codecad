@@ -36,20 +36,22 @@ jobs:
       - name: Apply ESLint fixes
         run: npm run lint:fix
 
-      - name: Verify ESLint fixes are committed
+      - name: Collect ESLint autofix diff
         id: lint_fix_diff
         run: |
           if ! git diff --quiet; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
             {
               echo "files<<EOF"
               git --no-pager diff --name-only
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
-            exit 1
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment PR with lint fix instructions
-        if: github.event_name == 'pull_request' && steps.lint_fix_diff.outcome == 'failure'
+        if: github.event_name == 'pull_request' && steps.lint_fix_diff.outputs.has_changes == 'true'
         continue-on-error: true
         uses: actions/github-script@v7
         env:
@@ -110,6 +112,15 @@ jobs:
                 body,
               });
             }
+
+      - name: Fail if ESLint autofixes are not committed
+        if: steps.lint_fix_diff.outputs.has_changes == 'true'
+        run: |
+          echo "ESLint produced autofixes."
+          echo "Run 'npm run lint:fix' locally, commit the changes, and push again."
+          echo "Changed files:"
+          git --no-pager diff --name-only
+          exit 1
 
       - name: Lint
         run: npm run lint
