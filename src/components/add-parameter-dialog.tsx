@@ -46,7 +46,7 @@ type AddParameterFormData = z.infer<ReturnType<typeof addParameterFormSchema>>;
 export const AddParameterDialog = () => {
   const [open, setOpen] = useState(false);
 
-  const { parameters, add, edit } = useParametersStore();
+  const { parameters, add } = useParametersStore();
 
   const existingNames = parameters.map((parameter) => parameter.name);
 
@@ -64,7 +64,6 @@ export const AddParameterDialog = () => {
   function onSubmit(data: AddParameterFormData) {
     add({
       ...data,
-      onValueChange: (value) => edit(data.name, { value }),
     });
     setOpen(false);
   }
