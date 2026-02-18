@@ -1,25 +1,14 @@
-import React, { createContext, useContext, ReactNode } from 'react';
-import { usePanZoom, PanZoomState } from '../hooks/usePanZoom';
+import { createContext, useContext, type ReactNode } from 'react';
+import { usePanZoom, type UsePanZoomReturn } from '@/hooks/usePanZoom';
 
-interface PanZoomContextType {
-  transform: string;
-  state: PanZoomState;
-  resetTransform: () => void;
-  setTransform: (x: number, y: number, scale: number) => void;
-}
-
-const PanZoomContext = createContext<PanZoomContextType | undefined>(undefined);
+const PanZoomContext = createContext<UsePanZoomReturn | undefined>(undefined);
 
 interface PanZoomProviderProps {
   children: ReactNode;
-  initialState?: Partial<PanZoomState>;
 }
 
-export const PanZoomProvider: React.FC<PanZoomProviderProps> = ({
-  children,
-  initialState,
-}) => {
-  const panZoom = usePanZoom(initialState);
+export const PanZoomProvider = ({ children }: PanZoomProviderProps) => {
+  const panZoom = usePanZoom();
 
   return (
     <PanZoomContext.Provider value={panZoom}>
@@ -28,10 +17,12 @@ export const PanZoomProvider: React.FC<PanZoomProviderProps> = ({
   );
 };
 
-export const usePanZoomContext = (): PanZoomContextType => {
+export const usePanZoomContext = (): UsePanZoomReturn => {
   const context = useContext(PanZoomContext);
+
   if (!context) {
     throw new Error('usePanZoomContext must be used within PanZoomProvider');
   }
+
   return context;
 };

@@ -18,13 +18,13 @@ export const usePanZoomHotkeys = ({
         e.preventDefault();
         resetTransform();
       }
-      
+
       // Ctrl + '+' или Ctrl + колесо вверх - увеличение
       if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
         e.preventDefault();
         zoomIn();
       }
-      
+
       // Ctrl + '-' - уменьшение
       if ((e.ctrlKey || e.metaKey) && e.key === '-') {
         e.preventDefault();
@@ -33,7 +33,7 @@ export const usePanZoomHotkeys = ({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };

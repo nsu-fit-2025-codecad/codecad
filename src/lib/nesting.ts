@@ -41,23 +41,41 @@ export function packModelsIntoNestingArea(
 ) {
   // Get nesting area bounds
   const nestingExtents = makerjs.measure.modelExtents(nestingArea);
+  const packedModels: IModelMap = {};
+  const didNotFitModels: IModelMap = {};
+
+  if (!nestingExtents) {
+    return {
+      packedModels,
+      didNotFitModels: {
+        ...didNotFitModels,
+        ...modelsToNest,
+      },
+    };
+  }
+
   const containerWidth = nestingExtents.high[0] - nestingExtents.low[0];
   const containerHeight = nestingExtents.high[1] - nestingExtents.low[1];
 
   // Prepare models with sizes
-  const modelsWithSizes: ModelWithSize[] = Object.entries(modelsToNest).map(
-    ([id, model]) => {
-      const extents = makerjs.measure.modelExtents(model);
+  const modelsWithSizes: ModelWithSize[] = [];
 
-      return {
-        id,
-        model,
-        width: extents.high[0] - extents.low[0],
-        height: extents.high[1] - extents.low[1],
-        extents,
-      };
+  Object.entries(modelsToNest).forEach(([id, model]) => {
+    const extents = makerjs.measure.modelExtents(model);
+
+    if (!extents) {
+      didNotFitModels[id] = model;
+      return;
     }
-  );
+
+    modelsWithSizes.push({
+      id,
+      model,
+      width: extents.high[0] - extents.low[0],
+      height: extents.high[1] - extents.low[1],
+      extents,
+    });
+  });
 
   modelsWithSizes.sort((a, b) => b.height - a.height);
 
@@ -67,9 +85,6 @@ export function packModelsIntoNestingArea(
     w: containerWidth,
     h: containerHeight,
   };
-
-  const packedModels: IModelMap = {};
-  const didNotFitModels: IModelMap = {};
 
   modelsWithSizes.forEach((item) => {
     const node = findNode(root, item.width, item.height);
