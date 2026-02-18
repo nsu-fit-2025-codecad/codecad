@@ -13,7 +13,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import React from 'react';
-import makerjs from "makerjs";
 
 interface ModelsPaneProps {
   onRunNesting: () => void;
@@ -28,7 +27,7 @@ export const ModelsPane = ({
   onClose,
   className,
 }: ModelsPaneProps) => {
-  const { models, finalModel } = useModelsStore();
+  const { models } = useModelsStore();
 
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>

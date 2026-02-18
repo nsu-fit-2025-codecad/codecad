@@ -25,36 +25,35 @@ export const HomePage = () => {
   } = usePanesStore();
 
   const exportDXF = () => {
-  if (!model) {
-    alert("No model to export");
-    return;
-  }
+    if (!model) {
+      alert('No model to export');
+      return;
+    }
 
-  try {
-    const dxf = makerjs.exporter.toDXF(model, {
-      units: "Millimeter",
-      usePOLYLINE: true,
-    });
+    try {
+      const dxf = makerjs.exporter.toDXF(model, {
+        units: 'Millimeter',
+        usePOLYLINE: true,
+      });
 
-    const blob = new Blob([dxf], {
-      type: "application/dxf",
-    });
+      const blob = new Blob([dxf], {
+        type: 'application/dxf',
+      });
 
-    const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `drawing_${Date.now()}.dxf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `drawing_${Date.now()}.dxf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error("DXF export error:", error);
-  }
-};
-
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('DXF export error:', error);
+    }
+  };
 
   const evalInput = useCallback(() => {
     if (!code) {
