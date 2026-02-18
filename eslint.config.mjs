@@ -11,6 +11,9 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
+    ignores: ['dist/**', 'build/**', 'node_modules/**'],
+  },
+  {
     files: ['**/*.{js,jsx,ts,tsx}'],
 
     plugins: {
@@ -24,6 +27,7 @@ export default [
     languageOptions: {
       globals: {
         ...globals.browser,
+        ...globals.node,
         ...globals.jasmine,
         ...globals.jest,
         process: true,
@@ -53,22 +57,31 @@ export default [
       'react-hooks/exhaustive-deps': 'error',
       '@typescript-eslint/no-empty-interface': 'warn',
       '@typescript-eslint/no-empty-function': 'off',
-      'quotes': 'off',
+      quotes: 'off',
       '@typescript-eslint/quotes': ['off', 'backtick'],
-      'react/jsx-curly-brace-presence': ['off', {
-        props: 'always',
-        children: 'never',
-      }],
-      'prefer-arrow/prefer-arrow-functions': ['off', {
-        disallowPrototype: true,
-        singleReturnOnly: false,
-        classPropertiesAllowed: true,
-        allowStandaloneDeclarations: false,
-      }],
-      'prefer-arrow-callback': ['off', {
-        allowNamedFunctions: false,
-        allowUnboundThis: false,
-      }],
+      'react/jsx-curly-brace-presence': [
+        'off',
+        {
+          props: 'always',
+          children: 'never',
+        },
+      ],
+      'prefer-arrow/prefer-arrow-functions': [
+        'off',
+        {
+          disallowPrototype: true,
+          singleReturnOnly: false,
+          classPropertiesAllowed: true,
+          allowStandaloneDeclarations: false,
+        },
+      ],
+      'prefer-arrow-callback': [
+        'off',
+        {
+          allowNamedFunctions: false,
+          allowUnboundThis: false,
+        },
+      ],
       'func-style': ['off', 'expression'],
       'arrow-body-style': ['off', 'as-needed'],
       'object-shorthand': 'off',
