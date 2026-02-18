@@ -24,6 +24,38 @@ export const HomePage = () => {
     closeParametersPane,
   } = usePanesStore();
 
+  const exportDXF = () => {
+  if (!model) {
+    alert("No model to export");
+    return;
+  }
+
+  try {
+    const dxf = makerjs.exporter.toDXF(model, {
+      units: "Millimeter",
+      usePOLYLINE: true,
+    });
+
+    const blob = new Blob([dxf], {
+      type: "application/dxf",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `drawing_${Date.now()}.dxf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("DXF export error:", error);
+  }
+};
+
+
   const evalInput = useCallback(() => {
     if (!code) {
       return;
@@ -102,6 +134,7 @@ export const HomePage = () => {
         <ModelsPane
           className="fixed left-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
           onRunNesting={runNesting}
+          onExportDXF={exportDXF}
           onClose={closeModelsPane}
         />
       )}

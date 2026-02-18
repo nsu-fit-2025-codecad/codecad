@@ -13,19 +13,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import React from 'react';
+import makerjs from "makerjs";
 
 interface ModelsPaneProps {
   onRunNesting: () => void;
+  onExportDXF: () => void;
   onClose: () => void;
   className?: string;
 }
 
 export const ModelsPane = ({
   onRunNesting,
+  onExportDXF,
   onClose,
   className,
 }: ModelsPaneProps) => {
-  const { models } = useModelsStore();
+  const { models, finalModel } = useModelsStore();
 
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>
@@ -43,6 +46,9 @@ export const ModelsPane = ({
         </div>
         <Button className="cursor-pointer" onClick={onRunNesting}>
           Run Nesting
+        </Button>
+        <Button className="cursor-pointer" onClick={onExportDXF}>
+          Export DXF
         </Button>
       </CardHeader>
       <ScrollArea className="w-full">
