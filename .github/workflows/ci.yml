@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply ESLint fixes
+        run: npm run lint:fix
+
+      - name: Verify ESLint fixes are committed
+        id: lint_fix_diff
+        run: |
+          if ! git diff --quiet; then
+            {
+              echo "files<<EOF"
+              git --no-pager diff --name-only
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Comment PR with lint fix instructions
+        if: github.event_name == 'pull_request' && steps.lint_fix_diff.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          LINT_FIX_FILES: ${{ steps.lint_fix_diff.outputs.files }}
+        with:
+          script: |
+            const marker = '<!-- lint-fix-reminder -->';
+            const files = (process.env.LINT_FIX_FILES || '').trim();
+            const bodyLines = [
+              marker,
+              'ESLint found autofixable problems.',
+              '',
+              'Run this locally and push the result:',
+              '```bash',
+              'npm run lint:fix',
+              '```',
+              '',
+              'Then commit and push updated files.',
+            ];
+
+            if (files) {
+              bodyLines.push(
+                '',
+                'Files with autofix changes:',
+                '```',
+                files,
+                '```'
+              );
+            }
+
+            const body = bodyLines.join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build

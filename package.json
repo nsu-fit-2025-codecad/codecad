@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "check": "npm run lint && npm run test && npm run build",
     "serve": "vite preview",
     "pre-commit": "lint-staged",
     "prepare": "husky install"
@@ -81,7 +85,7 @@
     ]
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
+    "*.{js,jsx,ts,tsx,mjs,cjs}": [
       "prettier --write",
       "eslint --fix"
     ]
