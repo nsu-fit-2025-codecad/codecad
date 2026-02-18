@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -36,80 +37,101 @@ jobs:
       - name: Apply ESLint fixes
         run: npm run lint:fix
 
-      - name: Verify ESLint fixes are committed
+      - name: Collect ESLint autofix diff
         id: lint_fix_diff
         run: |
           if ! git diff --quiet; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
             {
               echo "files<<EOF"
               git --no-pager diff --name-only
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
-            exit 1
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment PR with lint fix instructions
-        if: github.event_name == 'pull_request' && steps.lint_fix_diff.outcome == 'failure'
+        if: github.event_name == 'pull_request' && steps.lint_fix_diff.outputs.has_changes == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         uses: actions/github-script@v7
         env:
           LINT_FIX_FILES: ${{ steps.lint_fix_diff.outputs.files }}
         with:
           script: |
-            const marker = '<!-- lint-fix-reminder -->';
-            const files = (process.env.LINT_FIX_FILES || '').trim();
-            const bodyLines = [
-              marker,
-              'ESLint found autofixable problems.',
-              '',
-              'Run this locally and push the result:',
-              '```bash',
-              'npm run lint:fix',
-              '```',
-              '',
-              'Then commit and push updated files.',
-            ];
-
-            if (files) {
-              bodyLines.push(
+            try {
+              const marker = '<!-- lint-fix-reminder -->';
+              const files = (process.env.LINT_FIX_FILES || '').trim();
+              const bodyLines = [
+                marker,
+                'ESLint found autofixable problems.',
                 '',
-                'Files with autofix changes:',
+                'Run this locally and push the result:',
+                '```bash',
+                'npm run lint:fix',
                 '```',
-                files,
-                '```'
-              );
-            }
+                '',
+                'Then commit and push updated files.',
+              ];
 
-            const body = bodyLines.join('\n');
+              if (files) {
+                bodyLines.push(
+                  '',
+                  'Files with autofix changes:',
+                  '```',
+                  files,
+                  '```'
+                );
+              }
 
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
+              const body = bodyLines.join('\n');
 
-            const existing = comments.find((comment) =>
-              comment.user?.type === 'Bot' && comment.body?.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
+              const { owner, repo } = context.repo;
+              const issue_number = context.payload.pull_request.number;
+              const { data: comments } = await github.rest.issues.listComments({
                 owner,
                 repo,
                 issue_number,
-                body,
+                per_page: 100,
               });
+
+              const existing = comments.find((comment) =>
+                comment.user?.type === 'Bot' && comment.body?.includes(marker)
+              );
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number,
+                  body,
+                });
+              }
+            } catch (error) {
+              if (error?.status === 403) {
+                core.warning(
+                  'Cannot post PR comment: GITHUB_TOKEN has no write access in this context.'
+                );
+              } else {
+                throw error;
+              }
             }
+
+      - name: Fail if ESLint autofixes are not committed
+        if: steps.lint_fix_diff.outputs.has_changes == 'true'
+        run: |
+          echo "ESLint produced autofixes."
+          echo "Run 'npm run lint:fix' locally, commit the changes, and push again."
+          echo "Changed files:"
+          git --no-pager diff --name-only
+          exit 1
 
       - name: Lint
         run: npm run lint
