@@ -11,12 +11,14 @@ import { useDefaultLayout } from 'react-resizable-panels';
 
 interface WorkbenchLayoutProps {
   svgString: string;
+  selectedModelId: string | null;
   onExecuteCode: () => void;
   className?: string;
 }
 
 export const WorkbenchLayout = ({
   svgString,
+  selectedModelId,
   onExecuteCode,
   className,
 }: WorkbenchLayoutProps) => {
@@ -74,7 +76,10 @@ export const WorkbenchLayout = ({
           minSize={isDesktopLayout ? 30 : 35}
           className="min-h-0 min-w-0"
         >
-          <VisualizationArea svgString={svgString} />
+          <VisualizationArea
+            svgString={svgString}
+            selectedModelId={selectedModelId}
+          />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

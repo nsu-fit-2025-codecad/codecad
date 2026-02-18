@@ -5,7 +5,6 @@ import {
   ItemContent,
   ItemGroup,
   ItemHeader,
-  ItemSeparator,
   ItemTitle,
 } from '@/components/ui/item';
 import { cn } from '@/lib/utils';
@@ -27,7 +26,17 @@ export const ModelsPane = ({
   onClose,
   className,
 }: ModelsPaneProps) => {
-  const { models } = useModelsStore();
+  const { models, selectedModelId, selectModel, clearSelectedModel } =
+    useModelsStore();
+
+  const toggleModelSelection = (modelId: string) => {
+    if (selectedModelId === modelId) {
+      clearSelectedModel();
+      return;
+    }
+
+    selectModel(modelId);
+  };
 
   return (
     <Card className={cn(className, 'flex flex-col overflow-hidden')}>
@@ -52,10 +61,20 @@ export const ModelsPane = ({
       </CardHeader>
       <ScrollArea className="w-full">
         <CardContent>
-          <ItemGroup>
-            {models.map((model, index) => (
-              <React.Fragment key={model.id}>
-                <Item className="px-0">
+          <ItemGroup className="gap-2">
+            {models.map((model) => {
+              const isSelected = selectedModelId === model.id;
+
+              return (
+                <Item
+                  key={model.id}
+                  onClick={() => toggleModelSelection(model.id)}
+                  className={cn(
+                    'cursor-pointer px-3 py-2 border border-border/50 bg-background transition-[background-color,border-color,box-shadow] duration-150',
+                    isSelected && 'bg-accent border-border shadow-xs',
+                    !isSelected && 'hover:bg-accent/20 hover:border-border'
+                  )}
+                >
                   <ItemHeader>
                     <ItemTitle
                       className={cn(
@@ -67,12 +86,11 @@ export const ModelsPane = ({
                     </ItemTitle>
                   </ItemHeader>
                   <ItemContent>
-                    Width: {model.width} Height: {model.width}
+                    Width: {model.width} Height: {model.height}
                   </ItemContent>
                 </Item>
-                {index !== models.length - 1 && <ItemSeparator />}
-              </React.Fragment>
-            ))}
+              );
+            })}
           </ItemGroup>
         </CardContent>
       </ScrollArea>

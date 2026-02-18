@@ -15,7 +15,7 @@ export const HomePage = () => {
   const [model, setModel] = useState<IModel | null>(null);
 
   const { parameters } = useParametersStore();
-  const { update, updateFitStatus } = useModelsStore();
+  const { update, updateFitStatus, selectedModelId } = useModelsStore();
   const { code, settings } = useEditorStore();
   const {
     isModelsPaneOpen,
@@ -78,7 +78,9 @@ export const HomePage = () => {
         update(mapModelsToSizes(model.models));
       }
 
-      const svgString = makerjs.exporter.toSVG(model);
+      const svgString = makerjs.exporter.toSVG(model, {
+        useSvgPathOnly: false,
+      });
       setSvg(svgString);
     } catch (error) {
       console.error('Error:', error);
@@ -119,7 +121,9 @@ export const HomePage = () => {
 
         updateFitStatus(packedIds, notFitIds);
 
-        const svgString = makerjs.exporter.toSVG(packed);
+        const svgString = makerjs.exporter.toSVG(packed, {
+          useSvgPathOnly: false,
+        });
         setSvg(svgString);
       }
     }
@@ -127,7 +131,11 @@ export const HomePage = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
-      <WorkbenchLayout svgString={svg} onExecuteCode={evalInput} />
+      <WorkbenchLayout
+        svgString={svg}
+        selectedModelId={selectedModelId}
+        onExecuteCode={evalInput}
+      />
       <Toolbar className="fixed top-14 left-1/2 -translate-x-1/2 z-30" />
       {isModelsPaneOpen && (
         <ModelsPane
