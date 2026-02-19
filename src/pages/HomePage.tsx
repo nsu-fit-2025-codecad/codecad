@@ -5,14 +5,17 @@ import { useEditorStore, useParametersStore } from '@/store/store';
 import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
-import { packModelsIntoNestingArea } from '@/lib/nesting';
 import { Toolbar } from '@/components/toolbar';
 import { usePanesStore } from '@/store/panes-store';
 import { WorkbenchLayout } from '@/components/workbench-layout';
+import { NestingTargetDialog } from '@/components/nesting-target-dialog';
+import { packModelsIntoTargetModel } from '@/lib/nesting';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
   const [model, setModel] = useState<IModel | null>(null);
+  const [isNestingTargetDialogOpen, setIsNestingTargetDialogOpen] =
+    useState(false);
 
   const { parameters } = useParametersStore();
   const { update, updateFitStatus, selectedModelId } = useModelsStore();
@@ -95,38 +98,30 @@ export const HomePage = () => {
     evalInput();
   }, [evalInput, settings.autorun, code, parameters]);
 
-  const runNesting = () => {
-    if (!model) {
+  const runNestingForTarget = (targetModelId: string) => {
+    const result = packModelsIntoTargetModel(model, targetModelId);
+
+    if (!result) {
       return;
     }
 
-    if (model.models) {
-      const { nestingArea, ...modelsToNest } = model.models;
+    updateFitStatus(result.packedIds, result.notFitIds);
+    setSvg(result.svgString);
+  };
 
-      if (nestingArea && Object.keys(modelsToNest).length > 0) {
-        const { packedModels, didNotFitModels } = packModelsIntoNestingArea(
-          nestingArea,
-          modelsToNest
-        );
-
-        const packed = model;
-
-        packed.models = {
-          nestingArea,
-          ...packedModels,
-        };
-
-        const packedIds = new Set(Object.keys(packedModels));
-        const notFitIds = new Set(Object.keys(didNotFitModels));
-
-        updateFitStatus(packedIds, notFitIds);
-
-        const svgString = makerjs.exporter.toSVG(packed, {
-          useSvgPathOnly: false,
-        });
-        setSvg(svgString);
-      }
+  const runNesting = () => {
+    if (!model || !model.models) {
+      return;
     }
+
+    const availableTargetIds = Object.keys(model.models);
+
+    if (!selectedModelId || !availableTargetIds.includes(selectedModelId)) {
+      setIsNestingTargetDialogOpen(true);
+      return;
+    }
+
+    runNestingForTarget(selectedModelId);
   };
 
   return (
@@ -136,11 +131,19 @@ export const HomePage = () => {
         selectedModelId={selectedModelId}
         onExecuteCode={evalInput}
       />
-      <Toolbar className="fixed top-14 left-1/2 -translate-x-1/2 z-30" />
+      <Toolbar
+        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30"
+        onRunNesting={runNesting}
+      />
+      <NestingTargetDialog
+        open={isNestingTargetDialogOpen}
+        modelIds={Object.keys(model?.models ?? {})}
+        onOpenChange={setIsNestingTargetDialogOpen}
+        onConfirm={runNestingForTarget}
+      />
       {isModelsPaneOpen && (
         <ModelsPane
           className="fixed left-4 w-80 top-4 h-[calc(100vh-2rem)] z-10"
-          onRunNesting={runNesting}
           onExportDXF={exportDXF}
           onClose={closeModelsPane}
         />

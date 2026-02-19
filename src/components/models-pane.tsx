@@ -14,14 +14,12 @@ import { X } from 'lucide-react';
 import React from 'react';
 
 interface ModelsPaneProps {
-  onRunNesting: () => void;
   onExportDXF: () => void;
   onClose: () => void;
   className?: string;
 }
 
 export const ModelsPane = ({
-  onRunNesting,
   onExportDXF,
   onClose,
   className,
@@ -52,9 +50,6 @@ export const ModelsPane = ({
             <X />
           </Button>
         </div>
-        <Button className="cursor-pointer" onClick={onRunNesting}>
-          Run Nesting
-        </Button>
         <Button className="cursor-pointer" onClick={onExportDXF}>
           Export DXF
         </Button>

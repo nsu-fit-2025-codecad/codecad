@@ -2,13 +2,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
-import { Boxes, SlidersHorizontal } from 'lucide-react';
+import { Boxes, Package, SlidersHorizontal } from 'lucide-react';
 
 interface ToolbarProps {
+  onRunNesting: () => void;
   className?: string;
 }
 
-export const Toolbar = ({ className }: ToolbarProps) => {
+export const Toolbar = ({ onRunNesting, className }: ToolbarProps) => {
   const {
     toggleModelsPane,
     toggleParametersPane,
@@ -40,6 +41,15 @@ export const Toolbar = ({ className }: ToolbarProps) => {
           }
         >
           <SlidersHorizontal />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onRunNesting}
+          className="cursor-pointer"
+          size="icon"
+          title="Run Nesting"
+        >
+          <Package />
         </Button>
       </CardContent>
     </Card>

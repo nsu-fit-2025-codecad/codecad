@@ -107,3 +107,56 @@ export function packModelsIntoNestingArea(
 
   return { packedModels, didNotFitModels };
 }
+
+export interface PackModelsIntoTargetModelResult {
+  packedIds: Set<string>;
+  notFitIds: Set<string>;
+  svgString: string;
+}
+
+export function packModelsIntoTargetModel(
+  model: IModel | null,
+  targetModelId: string
+): PackModelsIntoTargetModelResult | null {
+  if (!model || !model.models) {
+    return null;
+  }
+
+  const nestingArea = model.models[targetModelId];
+
+  if (!nestingArea) {
+    return null;
+  }
+
+  const modelsToNest: IModelMap = {};
+
+  Object.entries(model.models).forEach(([modelId, nestingCandidate]) => {
+    if (modelId === targetModelId) {
+      return;
+    }
+
+    modelsToNest[modelId] = nestingCandidate;
+  });
+
+  if (Object.keys(modelsToNest).length === 0) {
+    return null;
+  }
+
+  const { packedModels, didNotFitModels } = packModelsIntoNestingArea(
+    nestingArea,
+    modelsToNest
+  );
+
+  model.models = {
+    [targetModelId]: nestingArea,
+    ...packedModels,
+  };
+
+  return {
+    packedIds: new Set(Object.keys(packedModels)),
+    notFitIds: new Set(Object.keys(didNotFitModels)),
+    svgString: makerjs.exporter.toSVG(model, {
+      useSvgPathOnly: false,
+    }),
+  };
+}
