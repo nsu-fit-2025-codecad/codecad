@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
 import { Boxes, Package, SlidersHorizontal } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
@@ -51,6 +52,7 @@ export const Toolbar = ({ onRunNesting, className }: ToolbarProps) => {
         >
           <Package />
         </Button>
+        <ThemeToggle />
       </CardContent>
     </Card>
   );
