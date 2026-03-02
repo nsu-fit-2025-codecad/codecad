@@ -6,15 +6,39 @@ import {
 import { compareFitness, evaluateNestFitness } from '@/lib/nesting/fitness';
 import { runGeneticSearch } from '@/lib/nesting/genetic';
 import { placePartsGreedy } from '@/lib/nesting/place';
-import type { NestConfig } from '@/lib/nesting/types';
+import type { FitnessScore } from '@/lib/nesting/fitness';
+import type { NestConfig, NestResult } from '@/lib/nesting/types';
 
 const EPSILON = 1e-9;
 const DEFAULT_CURVE_TOLERANCE = 1;
 const MAX_GA_VERTEX_BUDGET = 180;
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+const resolveRotations = (
+  rotations: number[] | undefined,
+  allowRotation: boolean
+) => {
+  if (Array.isArray(rotations) && rotations.length > 0) {
+    const normalized = Array.from(
+      new Set(
+        rotations
+          .filter((rotation) => Number.isFinite(rotation))
+          .map((rotation) => ((rotation % 360) + 360) % 360)
+      )
+    ).sort((left, right) => left - right);
+
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+
+  return allowRotation ? [0, 90] : [0];
+};
 
 export interface PackingOptions {
   gap?: number;
   allowRotation?: boolean;
+  rotations?: number[];
   curveTolerance?: number;
   searchStep?: number;
   useGeneticSearch?: boolean;
@@ -26,11 +50,71 @@ export interface PackingOptions {
   geneticSeed?: number;
 }
 
+export type NestingAlgorithm = 'deterministic' | 'genetic';
+
+export interface NestingProgress {
+  phase: 'preparing' | 'placing' | 'genetic' | 'finalizing';
+  progress: number;
+  message: string;
+  generation?: number;
+  totalGenerations?: number;
+  bestFitness?: FitnessScore;
+}
+
+export interface PackingRunCallbacks {
+  onProgress?: (progress: NestingProgress) => void;
+}
+
+export interface NestingRunStats {
+  algorithm: NestingAlgorithm;
+  placedCount: number;
+  notFitCount: number;
+  durationMs: number;
+  fitness: FitnessScore;
+  generationsEvaluated?: number;
+  evaluations?: number;
+  geneticSeed?: number;
+}
+
+export interface PackModelsIntoNestingAreaResult {
+  packedModels: IModelMap;
+  didNotFitModels: IModelMap;
+  stats: NestingRunStats;
+}
+
 export function packModelsIntoNestingArea(
   nestingArea: IModel,
   modelsToNest: IModelMap,
-  options: PackingOptions = {}
-) {
+  options: PackingOptions = {},
+  callbacks: PackingRunCallbacks = {}
+): PackModelsIntoNestingAreaResult {
+  const startedAt = Date.now();
+  const emitProgress = (progress: NestingProgress) => {
+    callbacks.onProgress?.({
+      ...progress,
+      progress: clamp01(progress.progress),
+    });
+  };
+  const buildStats = (
+    algorithm: NestingAlgorithm,
+    placements: NestResult['placements'],
+    didNotFitModels: IModelMap,
+    extras: Partial<NestingRunStats> = {}
+  ): NestingRunStats => ({
+    algorithm,
+    placedCount: Object.keys(packedModels).length,
+    notFitCount: Object.keys(didNotFitModels).length,
+    durationMs: Date.now() - startedAt,
+    fitness: evaluateNestFitness(
+      {
+        placements,
+        notPlacedIds: Object.keys(didNotFitModels),
+      },
+      1
+    ),
+    ...extras,
+  });
+
   const gap = Math.max(0, options.gap ?? 0);
   const allowRotation = options.allowRotation ?? true;
   const curveTolerance = Math.max(
@@ -41,16 +125,31 @@ export function packModelsIntoNestingArea(
   const packedModels: IModelMap = {};
   const didNotFitModels: IModelMap = {};
 
+  emitProgress({
+    phase: 'preparing',
+    progress: 0.05,
+    message: 'Preparing nesting input',
+  });
+
   const nestingExtents = makerjs.measure.modelExtents(nestingArea);
   const nestingShape = modelToPolygonShape(nestingArea, curveTolerance);
 
   if (!nestingExtents || !nestingShape || nestingShape.area <= EPSILON) {
+    const failedModels = {
+      ...didNotFitModels,
+      ...modelsToNest,
+    };
+
+    emitProgress({
+      phase: 'finalizing',
+      progress: 1,
+      message: 'Nesting finished',
+    });
+
     return {
       packedModels,
-      didNotFitModels: {
-        ...didNotFitModels,
-        ...modelsToNest,
-      },
+      didNotFitModels: failedModels,
+      stats: buildStats('deterministic', [], failedModels),
     };
   }
 
@@ -60,19 +159,38 @@ export function packModelsIntoNestingArea(
   );
   Object.assign(didNotFitModels, invalidModels);
 
+  emitProgress({
+    phase: 'preparing',
+    progress: 0.2,
+    message: 'Geometry prepared',
+  });
+
   if (parts.length === 0) {
+    emitProgress({
+      phase: 'finalizing',
+      progress: 1,
+      message: 'Nesting finished',
+    });
+
     return {
       packedModels,
       didNotFitModels,
+      stats: buildStats('deterministic', [], didNotFitModels),
     };
   }
 
   const config: NestConfig = {
     gap,
-    rotations: allowRotation ? [0, 90] : [0],
+    rotations: resolveRotations(options.rotations, allowRotation),
     curveTolerance,
     searchStep: options.searchStep,
   };
+
+  emitProgress({
+    phase: 'placing',
+    progress: 0.35,
+    message: 'Running deterministic placement',
+  });
 
   const deterministicPlacementResult = placePartsGreedy(
     parts,
@@ -80,6 +198,8 @@ export function packModelsIntoNestingArea(
     config
   );
   let placementResult = deterministicPlacementResult;
+  let selectedAlgorithm: NestingAlgorithm = 'deterministic';
+  let runStatsExtras: Partial<NestingRunStats> = {};
   const totalPartVertices = parts.reduce(
     (sum, part) =>
       sum +
@@ -89,29 +209,64 @@ export function packModelsIntoNestingArea(
       ),
     0
   );
+  const deterministicFitness = evaluateNestFitness(
+    deterministicPlacementResult,
+    1
+  );
 
   if (
     (options.useGeneticSearch ?? true) &&
     parts.length > 2 &&
     totalPartVertices <= MAX_GA_VERTEX_BUDGET
   ) {
-    const geneticResult = runGeneticSearch(parts, nestingShape, config, {
-      populationSize: options.populationSize,
-      maxGenerations: options.maxGenerations,
-      mutationRate: options.mutationRate,
-      crossoverRate: options.crossoverRate,
-      eliteCount: options.eliteCount,
-      seed: options.geneticSeed,
-    });
-    const deterministicFitness = evaluateNestFitness(
-      deterministicPlacementResult,
-      1
+    const geneticResult = runGeneticSearch(
+      parts,
+      nestingShape,
+      config,
+      {
+        populationSize: options.populationSize,
+        maxGenerations: options.maxGenerations,
+        mutationRate: options.mutationRate,
+        crossoverRate: options.crossoverRate,
+        eliteCount: options.eliteCount,
+        seed: options.geneticSeed,
+      },
+      {
+        onProgress: (progress) => {
+          const ratio =
+            progress.totalGenerations > 0
+              ? progress.generation / progress.totalGenerations
+              : 1;
+
+          emitProgress({
+            phase: 'genetic',
+            progress: 0.45 + ratio * 0.5,
+            message: 'Running genetic search',
+            generation: progress.generation,
+            totalGenerations: progress.totalGenerations,
+            bestFitness: progress.bestFitness,
+          });
+        },
+      }
     );
+
+    runStatsExtras = {
+      generationsEvaluated: geneticResult.generationsEvaluated,
+      evaluations: geneticResult.evaluations,
+      geneticSeed: geneticResult.seed,
+    };
 
     if (compareFitness(geneticResult.best.fitness, deterministicFitness) < 0) {
       placementResult = geneticResult.best.result;
+      selectedAlgorithm = 'genetic';
     }
   }
+
+  emitProgress({
+    phase: 'finalizing',
+    progress: 0.97,
+    message: 'Finalizing result',
+  });
 
   const partById = new Map(parts.map((part) => [part.id, part]));
 
@@ -156,19 +311,36 @@ export function packModelsIntoNestingArea(
     didNotFitModels[id] = part.sourceModel;
   });
 
-  return { packedModels, didNotFitModels };
+  emitProgress({
+    phase: 'finalizing',
+    progress: 1,
+    message: 'Nesting finished',
+  });
+
+  return {
+    packedModels,
+    didNotFitModels,
+    stats: buildStats(
+      selectedAlgorithm,
+      placementResult.placements,
+      didNotFitModels,
+      runStatsExtras
+    ),
+  };
 }
 
 export interface PackModelsIntoTargetModelResult {
   packedIds: Set<string>;
   notFitIds: Set<string>;
   svgString: string;
+  stats: NestingRunStats;
 }
 
 export function packModelsIntoTargetModel(
   model: IModel | null,
   targetModelId: string,
-  options: PackingOptions = {}
+  options: PackingOptions = {},
+  callbacks: PackingRunCallbacks = {}
 ): PackModelsIntoTargetModelResult | null {
   if (!model || !model.models) {
     return null;
@@ -194,10 +366,11 @@ export function packModelsIntoTargetModel(
     return null;
   }
 
-  const { packedModels, didNotFitModels } = packModelsIntoNestingArea(
+  const { packedModels, didNotFitModels, stats } = packModelsIntoNestingArea(
     nestingArea,
     modelsToNest,
-    options
+    options,
+    callbacks
   );
 
   model.models = {
@@ -212,5 +385,6 @@ export function packModelsIntoTargetModel(
     svgString: makerjs.exporter.toSVG(model, {
       useSvgPathOnly: false,
     }),
+    stats,
   };
 }

@@ -27,3 +27,14 @@ export interface GeneticRunResult {
   evaluations: number;
   seed: number;
 }
+
+export interface GeneticProgressSnapshot {
+  generation: number;
+  totalGenerations: number;
+  evaluations: number;
+  bestFitness: FitnessScore;
+}
+
+export interface GeneticSearchCallbacks {
+  onProgress?: (snapshot: GeneticProgressSnapshot) => void;
+}

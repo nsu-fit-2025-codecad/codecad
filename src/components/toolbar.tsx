@@ -7,10 +7,15 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
+  isNesting?: boolean;
   className?: string;
 }
 
-export const Toolbar = ({ onRunNesting, className }: ToolbarProps) => {
+export const Toolbar = ({
+  onRunNesting,
+  isNesting = false,
+  className,
+}: ToolbarProps) => {
   const {
     toggleModelsPane,
     toggleParametersPane,
@@ -48,7 +53,8 @@ export const Toolbar = ({ onRunNesting, className }: ToolbarProps) => {
           onClick={onRunNesting}
           className="cursor-pointer"
           size="icon"
-          title="Run Nesting"
+          title={isNesting ? 'Nesting in progress' : 'Run Nesting'}
+          disabled={isNesting}
         >
           <Package />
         </Button>

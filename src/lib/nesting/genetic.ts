@@ -2,6 +2,7 @@ import { compareFitness, evaluateNestFitness } from '@/lib/nesting/fitness';
 import type {
   EvaluatedChromosome,
   GeneticChromosome,
+  GeneticSearchCallbacks,
   GeneticConfig,
   GeneticRunResult,
 } from '@/lib/nesting/genetic-types';
@@ -426,7 +427,8 @@ export const runGeneticSearch = (
   parts: NestPart[],
   bin: PolygonShape,
   nestConfig: NestConfig,
-  rawConfig: Partial<GeneticConfig> = {}
+  rawConfig: Partial<GeneticConfig> = {},
+  callbacks: GeneticSearchCallbacks = {}
 ): GeneticRunResult => {
   const resolvedConfig = resolveGeneticConfig(rawConfig);
   const allowedRotations = normalizeRotations(nestConfig.rotations);
@@ -435,11 +437,20 @@ export const runGeneticSearch = (
 
   if (parts.length === 0) {
     const emptyResult = { placements: [], notPlacedIds: [] };
+    const emptyFitness = evaluateNestFitness(emptyResult, 1);
+
+    callbacks.onProgress?.({
+      generation: 0,
+      totalGenerations: 0,
+      evaluations: 0,
+      bestFitness: emptyFitness,
+    });
+
     return {
       best: {
         chromosome: { order: [], rotations: {} },
         result: emptyResult,
-        fitness: evaluateNestFitness(emptyResult, 1),
+        fitness: emptyFitness,
       },
       generationsEvaluated: 0,
       evaluations: 0,
@@ -470,6 +481,13 @@ export const runGeneticSearch = (
   );
   evaluations += currentEvaluated.length;
   let best = [...currentEvaluated].sort(compareEvaluatedChromosomes)[0];
+
+  callbacks.onProgress?.({
+    generation: 0,
+    totalGenerations: resolvedConfig.maxGenerations,
+    evaluations,
+    bestFitness: best.fitness,
+  });
 
   for (
     let generation = 0;
@@ -514,6 +532,13 @@ export const runGeneticSearch = (
     if (compareEvaluatedChromosomes(generationBest, best) < 0) {
       best = generationBest;
     }
+
+    callbacks.onProgress?.({
+      generation: generation + 1,
+      totalGenerations: resolvedConfig.maxGenerations,
+      evaluations,
+      bestFitness: best.fitness,
+    });
   }
 
   return {
