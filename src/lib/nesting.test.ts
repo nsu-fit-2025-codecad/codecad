@@ -223,6 +223,36 @@ describe('packModelsIntoNestingArea', () => {
         Object.keys(result.didNotFitModels).length
     ).toBe(Object.keys(models).length);
   });
+
+  it('returns run stats and emits progress updates', () => {
+    const target = new makerjs.models.Rectangle(100, 100);
+    const models = {
+      a: new makerjs.models.Rectangle(45, 45),
+      b: new makerjs.models.Rectangle(45, 45),
+    };
+    const progressEvents: number[] = [];
+
+    const result = packModelsIntoNestingArea(
+      target,
+      models,
+      {
+        useGeneticSearch: false,
+      },
+      {
+        onProgress: (progress) => {
+          progressEvents.push(progress.progress);
+        },
+      }
+    );
+
+    expect(result.stats.algorithm).toBe('deterministic');
+    expect(result.stats.placedCount + result.stats.notFitCount).toBe(
+      Object.keys(models).length
+    );
+    expect(result.stats.durationMs).toBeGreaterThanOrEqual(0);
+    expect(progressEvents.length).toBeGreaterThan(0);
+    expect(progressEvents[progressEvents.length - 1]).toBe(1);
+  });
 });
 
 describe('packModelsIntoTargetModel', () => {
