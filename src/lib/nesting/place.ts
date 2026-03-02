@@ -4,11 +4,11 @@ import {
   isShapeInsideBin,
   polygonsOverlap,
 } from '@/lib/nesting/polygon-boolean';
+import { shapeBounds, translateShape } from '@/lib/nesting/polygon-math';
 import {
-  rotateShape,
-  shapeBounds,
-  translateShape,
-} from '@/lib/nesting/polygon-math';
+  normalizeRotations,
+  normalizeShapeForRotation,
+} from '@/lib/nesting/rotations';
 import type {
   NestConfig,
   NestPart,
@@ -47,36 +47,6 @@ interface PlacedPartState {
   normalizedShape: PolygonShape;
   shape: PolygonShape;
 }
-
-const normalizeRotation = (rotation: number): number => {
-  const mod = rotation % 360;
-  return mod >= 0 ? mod : mod + 360;
-};
-
-const normalizedRotations = (rotations: number[]): number[] => {
-  const fallback = [0];
-
-  if (rotations.length === 0) {
-    return fallback;
-  }
-
-  return Array.from(new Set(rotations.map(normalizeRotation))).sort(
-    (a, b) => a - b
-  );
-};
-
-const normalizeShapeForRotation = (
-  shape: PolygonShape,
-  rotation: number
-): PolygonShape => {
-  const rotatedShape = rotateShape(shape, rotation);
-
-  return translateShape(
-    rotatedShape,
-    -rotatedShape.bounds.minX,
-    -rotatedShape.bounds.minY
-  );
-};
 
 const roundPointValue = (value: number) =>
   Math.round(value / POINT_EPSILON) * POINT_EPSILON;
@@ -281,26 +251,33 @@ const isBetterCandidate = (
   );
 };
 
+export interface PlacePartsGreedyOptions {
+  preserveInputOrder?: boolean;
+}
+
 export function placePartsGreedy(
   parts: NestPart[],
   bin: PolygonShape,
-  config: NestConfig
+  config: NestConfig,
+  options: PlacePartsGreedyOptions = {}
 ): NestResult {
   const placements: NestPlacement[] = [];
   const notPlacedIds: string[] = [];
   const placedParts: PlacedPartState[] = [];
   const nfpCache = new NfpCache();
   const rotatedPartCache = new Map<string, PolygonShape>();
-  const rotations = normalizedRotations(config.rotations);
-  const orderedParts = [...parts].sort((a, b) => {
-    const areaDiff = b.shape.area - a.shape.area;
+  const rotations = normalizeRotations(config.rotations);
+  const orderedParts = options.preserveInputOrder
+    ? [...parts]
+    : [...parts].sort((a, b) => {
+        const areaDiff = b.shape.area - a.shape.area;
 
-    if (Math.abs(areaDiff) > NESTING_EPSILON) {
-      return areaDiff;
-    }
+        if (Math.abs(areaDiff) > NESTING_EPSILON) {
+          return areaDiff;
+        }
 
-    return a.id.localeCompare(b.id);
-  });
+        return a.id.localeCompare(b.id);
+      });
   const getNormalizedShapeForRotation = (
     sourcePart: NestPart,
     rotation: number

@@ -3,17 +3,27 @@ import {
   modelMapToNestParts,
   modelToPolygonShape,
 } from '@/lib/nesting/makerjs-to-polygons';
+import { compareFitness, evaluateNestFitness } from '@/lib/nesting/fitness';
+import { runGeneticSearch } from '@/lib/nesting/genetic';
 import { placePartsGreedy } from '@/lib/nesting/place';
 import type { NestConfig } from '@/lib/nesting/types';
 
 const EPSILON = 1e-9;
 const DEFAULT_CURVE_TOLERANCE = 1;
+const MAX_GA_VERTEX_BUDGET = 180;
 
 export interface PackingOptions {
   gap?: number;
   allowRotation?: boolean;
   curveTolerance?: number;
   searchStep?: number;
+  useGeneticSearch?: boolean;
+  populationSize?: number;
+  maxGenerations?: number;
+  mutationRate?: number;
+  crossoverRate?: number;
+  eliteCount?: number;
+  geneticSeed?: number;
 }
 
 export function packModelsIntoNestingArea(
@@ -64,7 +74,45 @@ export function packModelsIntoNestingArea(
     searchStep: options.searchStep,
   };
 
-  const placementResult = placePartsGreedy(parts, nestingShape, config);
+  const deterministicPlacementResult = placePartsGreedy(
+    parts,
+    nestingShape,
+    config
+  );
+  let placementResult = deterministicPlacementResult;
+  const totalPartVertices = parts.reduce(
+    (sum, part) =>
+      sum +
+      part.shape.contours.reduce(
+        (contourSum, contour) => contourSum + contour.length,
+        0
+      ),
+    0
+  );
+
+  if (
+    (options.useGeneticSearch ?? true) &&
+    parts.length > 2 &&
+    totalPartVertices <= MAX_GA_VERTEX_BUDGET
+  ) {
+    const geneticResult = runGeneticSearch(parts, nestingShape, config, {
+      populationSize: options.populationSize,
+      maxGenerations: options.maxGenerations,
+      mutationRate: options.mutationRate,
+      crossoverRate: options.crossoverRate,
+      eliteCount: options.eliteCount,
+      seed: options.geneticSeed,
+    });
+    const deterministicFitness = evaluateNestFitness(
+      deterministicPlacementResult,
+      1
+    );
+
+    if (compareFitness(geneticResult.best.fitness, deterministicFitness) < 0) {
+      placementResult = geneticResult.best.result;
+    }
+  }
+
   const partById = new Map(parts.map((part) => [part.id, part]));
 
   placementResult.placements.forEach((placement) => {
