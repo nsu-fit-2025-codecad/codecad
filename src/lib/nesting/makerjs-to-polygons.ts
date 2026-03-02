@@ -6,21 +6,89 @@ import {
 import { createShape, translateShape } from '@/lib/nesting/polygon-math';
 import {
   NESTING_EPSILON,
+  type Contour,
   type NestPart,
   type PolygonShape,
 } from '@/lib/nesting/types';
 
 const MIN_CURVE_TOLERANCE = 1e-4;
+const MAX_CONTOUR_POINTS = 120;
 
 const toPoint = (point: IPoint) => ({
   x: point[0],
   y: point[1],
 });
 
-const chainToContour = (chain: IChain, curveTolerance: number) =>
-  makerjs.chain
+const isLinePathType = (pathType: unknown) =>
+  typeof pathType === 'string' && pathType.toLowerCase() === 'line';
+
+const chainContainsCurves = (chain: IChain) =>
+  (chain.links ?? []).some(
+    (link) => !isLinePathType(link.walkedPath?.pathContext?.type)
+  );
+
+const reduceContourDensity = (contour: Contour): Contour => {
+  if (contour.length <= MAX_CONTOUR_POINTS) {
+    return contour;
+  }
+
+  const step = Math.ceil(contour.length / MAX_CONTOUR_POINTS);
+  const keepIndices = new Set<number>();
+
+  for (let i = 0; i < contour.length; i += step) {
+    keepIndices.add(i);
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let minXIndex = 0;
+  let maxXIndex = 0;
+  let minYIndex = 0;
+  let maxYIndex = 0;
+
+  contour.forEach((point, index) => {
+    if (point.x < minX) {
+      minX = point.x;
+      minXIndex = index;
+    }
+
+    if (point.x > maxX) {
+      maxX = point.x;
+      maxXIndex = index;
+    }
+
+    if (point.y < minY) {
+      minY = point.y;
+      minYIndex = index;
+    }
+
+    if (point.y > maxY) {
+      maxY = point.y;
+      maxYIndex = index;
+    }
+  });
+
+  keepIndices.add(minXIndex);
+  keepIndices.add(maxXIndex);
+  keepIndices.add(minYIndex);
+  keepIndices.add(maxYIndex);
+
+  return [...keepIndices].sort((a, b) => a - b).map((index) => contour[index]);
+};
+
+const chainToContour = (chain: IChain, curveTolerance: number) => {
+  const contour = makerjs.chain
     .toKeyPoints(chain, Math.max(curveTolerance, MIN_CURVE_TOLERANCE))
     .map(toPoint);
+
+  if (!chainContainsCurves(chain)) {
+    return contour;
+  }
+
+  return reduceContourDensity(contour);
+};
 
 const flattenChains = (
   chains: ReturnType<typeof makerjs.model.findChains>

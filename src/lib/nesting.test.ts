@@ -78,6 +78,40 @@ describe('packModelsIntoNestingArea', () => {
     expect(after.high[0]).toBeCloseTo(before.high[0], 6);
     expect(after.high[1]).toBeCloseTo(before.high[1], 6);
   });
+
+  it('keeps curved ring placeable with small nonzero gap', () => {
+    const target = new makerjs.models.Rectangle(900, 500);
+    const models = {
+      ring: {
+        models: {
+          outer: new makerjs.models.Oval(220, 220),
+          inner: makerjs.model.move(
+            new makerjs.models.Oval(120, 120),
+            [50, 50]
+          ),
+        },
+      },
+      ovalPart: new makerjs.models.Oval(240, 120),
+      capsule: {
+        paths: {
+          top: new makerjs.paths.Arc([100, 60], 60, 180, 360),
+          right: new makerjs.paths.Line([160, 60], [160, 180]),
+          bottom: new makerjs.paths.Arc([100, 180], 60, 0, 180),
+          left: new makerjs.paths.Line([40, 180], [40, 60]),
+        },
+      },
+      circleA: new makerjs.models.Oval(100, 100),
+      circleB: new makerjs.models.Oval(80, 80),
+    };
+
+    const result = packModelsIntoNestingArea(target, models, {
+      allowRotation: true,
+      gap: 1,
+    });
+
+    expect(result.packedModels.ring).toBeDefined();
+    expect(result.didNotFitModels.ring).toBeUndefined();
+  }, 20_000);
 });
 
 describe('packModelsIntoTargetModel', () => {

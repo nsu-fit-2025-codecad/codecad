@@ -258,11 +258,7 @@ export function polygonsOverlap(
     return true;
   }
 
-  if (hasStrictContainment(b, a)) {
-    return true;
-  }
-
-  return false;
+  return hasStrictContainment(b, a);
 }
 
 export function isShapeInsideBin(
