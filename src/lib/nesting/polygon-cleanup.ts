@@ -80,6 +80,59 @@ export function removeCollinearPoints(contour: Contour): Contour {
   return points;
 }
 
+const signedCross = (
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number }
+) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+const isPointOnSegment = (
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+) => {
+  const cross = signedCross(start, end, point);
+
+  if (Math.abs(cross) > CLEANUP_EPSILON) {
+    return false;
+  }
+
+  const dot =
+    (point.x - start.x) * (point.x - end.x) +
+    (point.y - start.y) * (point.y - end.y);
+  return dot <= CLEANUP_EPSILON;
+};
+
+const pointInContour = (point: { x: number; y: number }, contour: Contour) => {
+  if (contour.length < 3) {
+    return false;
+  }
+
+  let inside = false;
+
+  for (let i = 0, j = contour.length - 1; i < contour.length; j = i, i += 1) {
+    const current = contour[i];
+    const previous = contour[j];
+
+    if (isPointOnSegment(point, previous, current)) {
+      return true;
+    }
+
+    const intersects =
+      current.y > point.y !== previous.y > point.y &&
+      point.x <
+        ((previous.x - current.x) * (point.y - current.y)) /
+          (previous.y - current.y) +
+          current.x;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+};
+
 export function normalizeContour(contour: Contour): Contour {
   const deduped = dedupePoints(contour);
   const cleaned = removeCollinearPoints(deduped);
@@ -110,25 +163,39 @@ export function normalizeShape(shape: PolygonShape): PolygonShape {
     return createShape([]);
   }
 
-  let outerIndex = 0;
-  let largestArea = 0;
+  const sortedContours = contours
+    .map((contour, originalIndex) => ({
+      contour,
+      originalIndex,
+      absArea: Math.abs(polygonArea(contour)),
+    }))
+    .sort((a, b) => {
+      if (Math.abs(b.absArea - a.absArea) > NESTING_EPSILON) {
+        return b.absArea - a.absArea;
+      }
 
-  contours.forEach((contour, index) => {
-    const area = Math.abs(polygonArea(contour));
+      return a.originalIndex - b.originalIndex;
+    });
 
-    if (area > largestArea) {
-      largestArea = area;
-      outerIndex = index;
+  const normalizedContours = sortedContours.map((entry, index) => {
+    const probePoint = entry.contour[0];
+    let depth = 0;
+
+    for (let i = 0; i < index; i += 1) {
+      if (pointInContour(probePoint, sortedContours[i].contour)) {
+        depth += 1;
+      }
     }
+
+    const area = polygonArea(entry.contour);
+    const shouldBeHole = depth % 2 === 1;
+
+    if (shouldBeHole) {
+      return area < 0 ? entry.contour : [...entry.contour].reverse();
+    }
+
+    return area > 0 ? entry.contour : [...entry.contour].reverse();
   });
 
-  const outerContour = contours[outerIndex];
-  const innerContours = contours
-    .filter((_, index) => index !== outerIndex)
-    .sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)))
-    .map((contour) =>
-      polygonArea(contour) > 0 ? [...contour].reverse() : contour
-    );
-
-  return createShape([outerContour, ...innerContours]);
+  return createShape(normalizedContours);
 }

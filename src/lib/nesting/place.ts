@@ -99,10 +99,24 @@ const isBetterCandidate = (
   return false;
 };
 
-const resolveSearchStep = (config: NestConfig) =>
-  config.searchStep && config.searchStep > NESTING_EPSILON
-    ? config.searchStep
-    : Math.max(config.curveTolerance, 0.5);
+const resolveSearchStep = (config: NestConfig, parts: NestPart[]) => {
+  if (config.searchStep && config.searchStep > NESTING_EPSILON) {
+    return config.searchStep;
+  }
+
+  const spans = parts.flatMap((part) => [
+    part.shape.bounds.width,
+    part.shape.bounds.height,
+  ]);
+  const positiveSpans = spans.filter((span) => span > NESTING_EPSILON);
+  const minSpan =
+    positiveSpans.length > 0
+      ? Math.min(...positiveSpans)
+      : Math.max(config.curveTolerance, 0.1);
+
+  const adaptiveStep = Math.max(minSpan / 20, config.curveTolerance / 10);
+  return Math.max(Math.min(adaptiveStep, 0.5), 0.01);
+};
 
 export function placePartsGreedy(
   parts: NestPart[],
@@ -113,8 +127,6 @@ export function placePartsGreedy(
   const notPlacedIds: string[] = [];
   const placedShapes: PolygonShape[] = [];
   const rotations = normalizedRotations(config.rotations);
-  const searchStep = resolveSearchStep(config);
-
   const orderedParts = [...parts].sort((a, b) => {
     const areaDiff = b.shape.area - a.shape.area;
 
@@ -124,6 +136,7 @@ export function placePartsGreedy(
 
     return a.id.localeCompare(b.id);
   });
+  const searchStep = resolveSearchStep(config, orderedParts);
 
   for (const part of orderedParts) {
     let bestCandidate: PlacementCandidate | null = null;

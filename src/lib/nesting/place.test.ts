@@ -31,6 +31,37 @@ const rectanglePart = (
   shape: rectangleShape(width, height),
 });
 
+const multiIslandShape = (
+  islands: Array<{ x: number; y: number; width: number; height: number }>
+): PolygonShape =>
+  normalizeShape(
+    createShape(
+      islands.map(({ x, y, width, height }) => [
+        { x, y },
+        { x: x + width, y },
+        { x: x + width, y: y + height },
+        { x, y: y + height },
+      ])
+    )
+  );
+
+const multiIslandPart = (
+  id: string,
+  islands: Array<{ x: number; y: number; width: number; height: number }>
+): NestPart => ({
+  id,
+  sourceModel: {
+    models: Object.fromEntries(
+      islands.map(({ x, y, width, height }, index) => {
+        const rect = new makerjs.models.Rectangle(width, height);
+        makerjs.model.moveRelative(rect, [x, y]);
+        return [`island-${index}`, rect];
+      })
+    ),
+  },
+  shape: multiIslandShape(islands),
+});
+
 describe('placePartsGreedy', () => {
   it('places non-overlapping parts inside the bin', () => {
     const bin = rectangleShape(100, 100);
@@ -112,5 +143,84 @@ describe('placePartsGreedy', () => {
     });
     expect(withGap.placements).toHaveLength(1);
     expect(withGap.notPlacedIds).toEqual(['b']);
+  });
+
+  it('finds decimal-fit placements with default search step', () => {
+    const bin = rectangleShape(10, 1);
+    const parts = [
+      rectanglePart('a', 3.4, 1),
+      rectanglePart('b', 3.3, 1),
+      rectanglePart('c', 3.3, 1),
+    ];
+
+    const result = placePartsGreedy(parts, bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(result.notPlacedIds).toHaveLength(0);
+    expect(result.placements).toHaveLength(3);
+
+    const byId = new Map(
+      result.placements.map((placement) => [placement.id, placement])
+    );
+    expect(byId.get('a')?.x).toBeCloseTo(0, 6);
+    expect(byId.get('b')?.x).toBeCloseTo(3.4, 6);
+    expect(byId.get('c')?.x).toBeCloseTo(6.7, 6);
+  });
+
+  it('treats multi-island parts as solid islands during placement', () => {
+    const bin = rectangleShape(250, 100);
+    const composite = multiIslandPart('composite', [
+      { x: 0, y: 0, width: 100, height: 80 },
+      { x: 140, y: 20, width: 30, height: 30 },
+    ]);
+    const blocker = rectanglePart('blocker', 40, 40);
+    const blockerTooWide = rectanglePart('blocker-too-wide', 80, 40);
+
+    const fitsInGap = placePartsGreedy([composite, blocker], bin, {
+      gap: 0,
+      rotations: [0, 90],
+      curveTolerance: 1,
+      searchStep: 1,
+    });
+
+    expect(fitsInGap.notPlacedIds).toHaveLength(0);
+    expect(fitsInGap.placements).toHaveLength(2);
+
+    const compositePlacement = fitsInGap.placements.find(
+      (placement) => placement.id === 'composite'
+    );
+    const blockerPlacement = fitsInGap.placements.find(
+      (placement) => placement.id === 'blocker'
+    );
+
+    expect(compositePlacement).toBeDefined();
+    expect(blockerPlacement).toBeDefined();
+    expect(
+      polygonsOverlap(compositePlacement!.shape, blockerPlacement!.shape, 0)
+    ).toBe(false);
+
+    const tooWideForGap = placePartsGreedy([composite, blockerTooWide], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+      searchStep: 1,
+    });
+
+    const compositePlacement2 = tooWideForGap.placements.find(
+      (placement) => placement.id === 'composite'
+    );
+    const widePlacement = tooWideForGap.placements.find(
+      (placement) => placement.id === 'blocker-too-wide'
+    );
+
+    expect(compositePlacement2).toBeDefined();
+    expect(widePlacement).toBeDefined();
+    expect(
+      polygonsOverlap(compositePlacement2!.shape, widePlacement!.shape, 0)
+    ).toBe(false);
+    expect(widePlacement!.x).toBeGreaterThanOrEqual(170);
   });
 });
