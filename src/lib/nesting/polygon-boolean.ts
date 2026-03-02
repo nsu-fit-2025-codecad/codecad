@@ -1,4 +1,4 @@
-import { areBoundsOverlapping } from '@/lib/nesting/polygon-math';
+import { areBoundsOverlapping, polygonArea } from '@/lib/nesting/polygon-math';
 import type { Contour, Point, PolygonShape } from '@/lib/nesting/types';
 import { NESTING_EPSILON } from '@/lib/nesting/types';
 
@@ -203,17 +203,23 @@ export function pointInPolygon(point: Point, shape: PolygonShape): boolean {
     return false;
   }
 
-  if (!pointInContour(point, shape.contours[0])) {
-    return false;
-  }
+  let winding = 0;
 
-  for (let i = 1; i < shape.contours.length; i += 1) {
-    if (pointInContour(point, shape.contours[i])) {
-      return false;
+  for (const contour of shape.contours) {
+    if (!pointInContour(point, contour)) {
+      continue;
     }
+
+    const area = polygonArea(contour);
+
+    if (Math.abs(area) <= NESTING_EPSILON) {
+      continue;
+    }
+
+    winding += area > 0 ? 1 : -1;
   }
 
-  return true;
+  return winding > 0;
 }
 
 export function polygonsOverlap(

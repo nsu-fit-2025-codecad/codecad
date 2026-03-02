@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import makerjs, { type IModel, type IModelMap } from 'makerjs';
+import { pointInPolygon } from '@/lib/nesting/polygon-boolean';
+import { polygonArea } from '@/lib/nesting/polygon-math';
 import {
   modelMapToNestParts,
   modelToPolygonShape,
@@ -37,6 +39,30 @@ describe('modelToPolygonShape', () => {
 
     const shape = modelToPolygonShape(openModel, 1);
     expect(shape).toBeNull();
+  });
+
+  it('preserves disjoint closed islands as solid geometry', () => {
+    const disjointModel: IModel = {
+      models: {
+        left: new makerjs.models.Rectangle(2, 2),
+        right: new makerjs.models.Rectangle(2, 2),
+      },
+    };
+
+    makerjs.model.moveRelative(disjointModel.models!.right, [5, 0]);
+
+    const shape = modelToPolygonShape(disjointModel, 0.5);
+
+    expect(shape).not.toBeNull();
+    expect(shape?.contours).toHaveLength(2);
+    expect(shape?.area).toBeCloseTo(8, 6);
+    expect(shape?.contours.every((contour) => polygonArea(contour) > 0)).toBe(
+      true
+    );
+
+    expect(pointInPolygon({ x: 1, y: 1 }, shape!)).toBe(true);
+    expect(pointInPolygon({ x: 6, y: 1 }, shape!)).toBe(true);
+    expect(pointInPolygon({ x: 3.5, y: 1 }, shape!)).toBe(false);
   });
 });
 
