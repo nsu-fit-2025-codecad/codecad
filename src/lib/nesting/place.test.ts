@@ -5,9 +5,15 @@ import {
   polygonsOverlap,
 } from '@/lib/nesting/polygon-boolean';
 import { normalizeShape } from '@/lib/nesting/polygon-cleanup';
-import { createShape } from '@/lib/nesting/polygon-math';
+import {
+  createShape,
+  rotateShape,
+  shapeBounds,
+  translateShape,
+} from '@/lib/nesting/polygon-math';
 import { placePartsGreedy } from '@/lib/nesting/place';
 import type { NestPart, PolygonShape } from '@/lib/nesting/types';
+import { NESTING_EPSILON } from '@/lib/nesting/types';
 
 const rectangleShape = (width: number, height: number): PolygonShape =>
   normalizeShape(
@@ -61,6 +67,125 @@ const multiIslandPart = (
   },
   shape: multiIslandShape(islands),
 });
+
+const normalizeRotation = (rotation: number) => {
+  const mod = rotation % 360;
+  return mod >= 0 ? mod : mod + 360;
+};
+
+const normalizeShapeForRotation = (
+  shape: PolygonShape,
+  rotation: number
+): PolygonShape => {
+  const rotatedShape = rotateShape(shape, rotation);
+
+  return translateShape(
+    rotatedShape,
+    -rotatedShape.bounds.minX,
+    -rotatedShape.bounds.minY
+  );
+};
+
+const axisValues = (min: number, max: number, step: number): number[] => {
+  if (max < min - NESTING_EPSILON) {
+    return [];
+  }
+
+  const values: number[] = [];
+  const count = Math.floor((max - min) / step + NESTING_EPSILON);
+
+  for (let i = 0; i <= count; i += 1) {
+    values.push(min + i * step);
+  }
+
+  if (
+    values.length === 0 ||
+    Math.abs(values[values.length - 1] - max) > NESTING_EPSILON
+  ) {
+    values.push(max);
+  }
+
+  return values;
+};
+
+const placePartsScanBaseline = (
+  parts: NestPart[],
+  bin: PolygonShape,
+  gap = 0,
+  step = 1
+) => {
+  const rotations = [0];
+  const placements: Array<{
+    id: string;
+    x: number;
+    y: number;
+    rotation: number;
+    shape: PolygonShape;
+  }> = [];
+  const placedShapes: PolygonShape[] = [];
+  const notPlacedIds: string[] = [];
+  const orderedParts = [...parts].sort((a, b) => b.shape.area - a.shape.area);
+
+  orderedParts.forEach((part) => {
+    let placed = false;
+
+    for (const rotation of rotations.map(normalizeRotation)) {
+      const normalizedShape = normalizeShapeForRotation(part.shape, rotation);
+      const maxX = bin.bounds.maxX - normalizedShape.bounds.width;
+      const maxY = bin.bounds.maxY - normalizedShape.bounds.height;
+      const xCandidates = axisValues(bin.bounds.minX, maxX, step);
+      const yCandidates = axisValues(bin.bounds.minY, maxY, step);
+
+      for (const y of yCandidates) {
+        for (const x of xCandidates) {
+          const candidate = translateShape(normalizedShape, x, y);
+
+          if (!isShapeInsideBin(candidate, bin, gap)) {
+            continue;
+          }
+
+          if (
+            placedShapes.some((placedShape) =>
+              polygonsOverlap(candidate, placedShape, gap)
+            )
+          ) {
+            continue;
+          }
+
+          placements.push({
+            id: part.id,
+            x,
+            y,
+            rotation,
+            shape: candidate,
+          });
+          placedShapes.push(candidate);
+          placed = true;
+          break;
+        }
+
+        if (placed) {
+          break;
+        }
+      }
+
+      if (placed) {
+        break;
+      }
+    }
+
+    if (!placed) {
+      notPlacedIds.push(part.id);
+    }
+  });
+
+  return { placements, notPlacedIds };
+};
+
+const combinedBoundsArea = (shapes: PolygonShape[]) => {
+  const bounds = shapeBounds(shapes.flatMap((shape) => shape.contours));
+  return bounds.width * bounds.height;
+};
 
 describe('placePartsGreedy', () => {
   it('places non-overlapping parts inside the bin', () => {
@@ -221,6 +346,72 @@ describe('placePartsGreedy', () => {
     expect(
       polygonsOverlap(compositePlacement2!.shape, widePlacement!.shape, 0)
     ).toBe(false);
-    expect(widePlacement!.x).toBeGreaterThanOrEqual(170);
+
+    const occupiesInterIslandGap = !(
+      widePlacement!.x + 80 <= 100 ||
+      widePlacement!.x >= 140 ||
+      widePlacement!.y + 40 <= 20 ||
+      widePlacement!.y >= 50
+    );
+    expect(occupiesInterIslandGap).toBe(false);
+  });
+
+  it('packs a concave fixture tighter than the legacy scan baseline', () => {
+    const bin = rectangleShape(140, 100);
+    const concavePart: NestPart = {
+      id: 'concave',
+      sourceModel: new makerjs.models.Rectangle(1, 1),
+      shape: normalizeShape(
+        createShape([
+          [
+            { x: 0, y: 0 },
+            { x: 80, y: 0 },
+            { x: 80, y: 40 },
+            { x: 40, y: 40 },
+            { x: 40, y: 80 },
+            { x: 0, y: 80 },
+          ],
+        ])
+      ),
+    };
+    const plugPart = rectanglePart('plug', 40, 40);
+    const parts = [concavePart, plugPart];
+    const interlockedPlug = translateShape(plugPart.shape, 40, 40);
+
+    expect(polygonsOverlap(concavePart.shape, interlockedPlug, 0)).toBe(false);
+
+    const baseline = placePartsScanBaseline(parts, bin, 0, 1);
+    const nfpResult = placePartsGreedy(parts, bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+      searchStep: 1,
+    });
+
+    expect(baseline.notPlacedIds).toHaveLength(0);
+    expect(nfpResult.notPlacedIds).toHaveLength(0);
+
+    const baselineArea = combinedBoundsArea(
+      baseline.placements.map((placement) => placement.shape)
+    );
+    const nfpArea = combinedBoundsArea(
+      nfpResult.placements.map((placement) => placement.shape)
+    );
+
+    expect(nfpArea).toBeLessThan(baselineArea);
+
+    const baselinePlug = baseline.placements.find(
+      (placement) => placement.id === 'plug'
+    );
+    const nfpPlug = nfpResult.placements.find(
+      (placement) => placement.id === 'plug'
+    );
+
+    expect(baselinePlug).toBeDefined();
+    expect(nfpPlug).toBeDefined();
+    expect(baselinePlug!.x).toBeCloseTo(80, 6);
+    expect(baselinePlug!.y).toBeCloseTo(0, 6);
+    expect(nfpPlug!.x).toBeCloseTo(40, 6);
+    expect(nfpPlug!.y).toBeCloseTo(40, 6);
   });
 });

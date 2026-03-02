@@ -30,6 +30,40 @@ describe('modelToPolygonShape', () => {
     expect(shape?.bounds.width).toBeGreaterThan(30);
   });
 
+  it('caps contour density for curved geometry while preserving area', () => {
+    const diameter = 220;
+    const oval = new makerjs.models.Oval(diameter, diameter);
+    const shape = modelToPolygonShape(oval, 1);
+    const expectedArea = Math.PI * (diameter / 2) * (diameter / 2);
+
+    expect(shape).not.toBeNull();
+    expect(shape?.contours).toHaveLength(1);
+    expect(shape?.contours[0].length ?? 0).toBeLessThanOrEqual(120);
+    expect(shape?.area ?? 0).toBeGreaterThan(expectedArea * 0.9);
+    expect(shape?.area ?? 0).toBeLessThan(expectedArea * 1.1);
+  });
+
+  it('does not reduce dense polygonal contours made of line segments', () => {
+    const points: makerjs.IPoint[] = [];
+
+    for (let i = 0; i < 160; i += 1) {
+      const angle = (Math.PI * 2 * i) / 160;
+      const radius = i % 2 === 0 ? 100 : 90;
+      points.push([radius * Math.cos(angle), radius * Math.sin(angle)]);
+    }
+
+    const densePolygon = new makerjs.models.ConnectTheDots(true, points);
+    const shape = modelToPolygonShape(densePolygon, 1);
+    const expectedArea = Math.abs(
+      polygonArea(points.map((point) => ({ x: point[0], y: point[1] })))
+    );
+
+    expect(shape).not.toBeNull();
+    expect(shape?.contours).toHaveLength(1);
+    expect(shape?.contours[0].length ?? 0).toBeGreaterThanOrEqual(158);
+    expect(shape?.area ?? 0).toBeCloseTo(expectedArea, 3);
+  });
+
   it('returns null for open geometry', () => {
     const openModel: IModel = {
       paths: {
