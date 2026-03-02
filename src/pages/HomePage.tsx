@@ -10,12 +10,17 @@ import { usePanesStore } from '@/store/panes-store';
 import { WorkbenchLayout } from '@/components/workbench-layout';
 import { NestingTargetDialog } from '@/components/nesting-target-dialog';
 import { packModelsIntoTargetModel } from '@/lib/nesting';
+import type { PackingOptions } from '@/lib/nesting';
 
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
   const [model, setModel] = useState<IModel | null>(null);
   const [isNestingTargetDialogOpen, setIsNestingTargetDialogOpen] =
     useState(false);
+  const [nestingOptions, setNestingOptions] = useState<PackingOptions>({
+    allowRotation: true,
+    gap: 0,
+  });
 
   const { parameters } = useParametersStore();
   const { update, updateFitStatus, selectedModelId } = useModelsStore();
@@ -98,8 +103,22 @@ export const HomePage = () => {
     evalInput();
   }, [evalInput, settings.autorun, code, parameters]);
 
-  const runNestingForTarget = (targetModelId: string) => {
-    const result = packModelsIntoTargetModel(model, targetModelId);
+  const runNestingForTarget = (
+    targetModelId: string,
+    options: PackingOptions = nestingOptions
+  ) => {
+    const normalizedOptions: PackingOptions = {
+      allowRotation: options.allowRotation ?? true,
+      gap: Math.max(0, options.gap ?? 0),
+    };
+
+    setNestingOptions(normalizedOptions);
+
+    const result = packModelsIntoTargetModel(
+      model,
+      targetModelId,
+      normalizedOptions
+    );
 
     if (!result) {
       return;
@@ -113,15 +132,7 @@ export const HomePage = () => {
     if (!model || !model.models) {
       return;
     }
-
-    const availableTargetIds = Object.keys(model.models);
-
-    if (!selectedModelId || !availableTargetIds.includes(selectedModelId)) {
-      setIsNestingTargetDialogOpen(true);
-      return;
-    }
-
-    runNestingForTarget(selectedModelId);
+    setIsNestingTargetDialogOpen(true);
   };
 
   return (
@@ -138,6 +149,8 @@ export const HomePage = () => {
       <NestingTargetDialog
         open={isNestingTargetDialogOpen}
         modelIds={Object.keys(model?.models ?? {})}
+        initialTargetModelId={selectedModelId}
+        initialOptions={nestingOptions}
         onOpenChange={setIsNestingTargetDialogOpen}
         onConfirm={runNestingForTarget}
       />
