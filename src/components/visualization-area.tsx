@@ -43,10 +43,10 @@ export const VisualizationArea = ({
   };
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative h-full w-full bg-background">
       <div
         ref={containerRef}
-        className="relative w-full h-full"
+        className="relative h-full w-full"
         style={getContainerStyle()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -61,7 +61,7 @@ export const VisualizationArea = ({
         />
       </div>
 
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xs bg-black/70 text-white px-2 py-1 rounded">
+      <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded border bg-card/90 px-2 py-1 text-xs text-card-foreground shadow-sm backdrop-blur">
         X: {Math.round(transform.x)} Y: {Math.round(transform.y)} Zoom:{' '}
         {Math.round(transform.scale * 100)}%
       </div>

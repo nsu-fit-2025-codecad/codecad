@@ -62,7 +62,7 @@ export const WorkbenchLayout = ({
           minSize={isDesktopLayout ? 25 : 30}
           className="min-h-0 min-w-0"
         >
-          <div className="h-full w-full bg-white px-2 pt-4">
+          <div className="h-full w-full bg-background px-2 pt-4">
             <CodeEditor onExecuteCode={onExecuteCode} />
           </div>
         </ResizablePanel>

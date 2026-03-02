@@ -136,7 +136,7 @@ export const HomePage = () => {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
+    <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
       <WorkbenchLayout
         svgString={svg}
         selectedModelId={selectedModelId}
