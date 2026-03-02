@@ -6,6 +6,7 @@ import {
 import { compareFitness, evaluateNestFitness } from '@/lib/nesting/fitness';
 import { runGeneticSearch } from '@/lib/nesting/genetic';
 import { placePartsGreedy } from '@/lib/nesting/place';
+import { renderModelToSvg } from '@/lib/svg-render';
 import type { FitnessScore } from '@/lib/nesting/fitness';
 import type { NestConfig, NestResult } from '@/lib/nesting/types';
 
@@ -382,9 +383,7 @@ export function packModelsIntoTargetModel(
   return {
     packedIds: new Set(Object.keys(packedModels)),
     notFitIds: new Set(Object.keys(didNotFitModels)),
-    svgString: makerjs.exporter.toSVG(model, {
-      useSvgPathOnly: false,
-    }),
+    svgString: renderModelToSvg(model),
     stats,
   };
 }

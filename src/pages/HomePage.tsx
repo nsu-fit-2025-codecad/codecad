@@ -19,6 +19,7 @@ import type {
   NestingRunStats,
   PackingOptions,
 } from '@/lib/nesting';
+import { renderModelToSvg } from '@/lib/svg-render';
 
 const normalizeNumeric = (
   value: number | undefined,
@@ -228,9 +229,7 @@ export const HomePage = () => {
         update(mapModelsToSizes(model.models));
       }
 
-      const svgString = makerjs.exporter.toSVG(model, {
-        useSvgPathOnly: false,
-      });
+      const svgString = renderModelToSvg(model);
       setSvg(svgString);
       modelRevisionRef.current += 1;
     } catch (error) {

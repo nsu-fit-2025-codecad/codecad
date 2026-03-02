@@ -278,6 +278,9 @@ describe('packModelsIntoTargetModel', () => {
     expect(result?.packedIds.size).toBe(1);
     expect(result?.notFitIds.size).toBe(1);
     expect(result?.svgString).toContain('<svg');
+    expect(result?.svgString).toContain('data-model-fill-for="target"');
+    expect(result?.svgString).toContain('data-model-fill-for="a"');
+    expect(result?.svgString).toContain('data-model-fill-for="b"');
 
     expect(root.models).toBeDefined();
     expect(Object.keys(root.models ?? {}).sort()).toEqual(['a', 'b', 'target']);
