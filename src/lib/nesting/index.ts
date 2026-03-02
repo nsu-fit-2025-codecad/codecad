@@ -7,3 +7,7 @@ export * from './makerjs-to-polygons';
 export * from './nfp';
 export * from './nfp-cache';
 export * from './place';
+export * from './rotations';
+export * from './fitness';
+export * from './genetic-types';
+export * from './genetic';

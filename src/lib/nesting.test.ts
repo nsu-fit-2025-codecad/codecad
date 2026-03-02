@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import makerjs, { IModel } from 'makerjs';
+import makerjs, { IModel, IModelMap } from 'makerjs';
 import {
   packModelsIntoNestingArea,
   packModelsIntoTargetModel,
@@ -16,6 +16,34 @@ const getSize = (model: IModel) => {
     width: extents.high[0] - extents.low[0],
     height: extents.high[1] - extents.low[1],
   };
+};
+
+const combinedPackedArea = (models: IModelMap) => {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let found = false;
+
+  Object.values(models).forEach((model) => {
+    const extents = makerjs.measure.modelExtents(model);
+
+    if (!extents) {
+      return;
+    }
+
+    found = true;
+    minX = Math.min(minX, extents.low[0]);
+    minY = Math.min(minY, extents.low[1]);
+    maxX = Math.max(maxX, extents.high[0]);
+    maxY = Math.max(maxY, extents.high[1]);
+  });
+
+  if (!found) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return (maxX - minX) * (maxY - minY);
 };
 
 describe('packModelsIntoNestingArea', () => {
@@ -112,6 +140,89 @@ describe('packModelsIntoNestingArea', () => {
     expect(result.packedModels.ring).toBeDefined();
     expect(result.didNotFitModels.ring).toBeUndefined();
   }, 20_000);
+
+  it('GA orchestration improves or preserves deterministic quality', () => {
+    const target = new makerjs.models.Rectangle(140, 100);
+    const models = {
+      concave: {
+        paths: {
+          a: new makerjs.paths.Line([0, 0], [80, 0]),
+          b: new makerjs.paths.Line([80, 0], [80, 40]),
+          c: new makerjs.paths.Line([80, 40], [40, 40]),
+          d: new makerjs.paths.Line([40, 40], [40, 80]),
+          e: new makerjs.paths.Line([40, 80], [0, 80]),
+          f: new makerjs.paths.Line([0, 80], [0, 0]),
+        },
+      },
+      plug: new makerjs.models.Rectangle(40, 40),
+      barA: new makerjs.models.Rectangle(20, 30),
+      barB: new makerjs.models.Rectangle(30, 20),
+    };
+
+    const deterministic = packModelsIntoNestingArea(target, models, {
+      allowRotation: true,
+      useGeneticSearch: false,
+    });
+    const withGa = packModelsIntoNestingArea(target, models, {
+      allowRotation: true,
+      useGeneticSearch: true,
+      populationSize: 8,
+      maxGenerations: 2,
+      mutationRate: 0.25,
+      crossoverRate: 0.85,
+      geneticSeed: 1234,
+    });
+    const deterministicPackedCount = Object.keys(
+      deterministic.packedModels
+    ).length;
+    const gaPackedCount = Object.keys(withGa.packedModels).length;
+
+    expect(gaPackedCount).toBeGreaterThanOrEqual(deterministicPackedCount);
+
+    if (gaPackedCount === deterministicPackedCount && gaPackedCount > 0) {
+      expect(combinedPackedArea(withGa.packedModels)).toBeLessThanOrEqual(
+        combinedPackedArea(deterministic.packedModels) + 1e-6
+      );
+    }
+  });
+
+  it('handles malformed GA numeric options without crashing', () => {
+    const target = new makerjs.models.Rectangle(120, 80);
+    const models = {
+      a: new makerjs.models.Rectangle(60, 30),
+      b: new makerjs.models.Rectangle(50, 30),
+      c: new makerjs.models.Rectangle(20, 20),
+    };
+
+    expect(() =>
+      packModelsIntoNestingArea(target, models, {
+        allowRotation: true,
+        useGeneticSearch: true,
+        populationSize: Number.NaN,
+        maxGenerations: Number.POSITIVE_INFINITY,
+        mutationRate: Number.NaN,
+        crossoverRate: Number.NEGATIVE_INFINITY,
+        eliteCount: Number.NaN,
+        geneticSeed: Number.NaN,
+      })
+    ).not.toThrow();
+
+    const result = packModelsIntoNestingArea(target, models, {
+      allowRotation: true,
+      useGeneticSearch: true,
+      populationSize: Number.NaN,
+      maxGenerations: Number.POSITIVE_INFINITY,
+      mutationRate: Number.NaN,
+      crossoverRate: Number.NEGATIVE_INFINITY,
+      eliteCount: Number.NaN,
+      geneticSeed: Number.NaN,
+    });
+
+    expect(
+      Object.keys(result.packedModels).length +
+        Object.keys(result.didNotFitModels).length
+    ).toBe(Object.keys(models).length);
+  });
 });
 
 describe('packModelsIntoTargetModel', () => {
