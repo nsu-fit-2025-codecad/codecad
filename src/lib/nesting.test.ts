@@ -81,14 +81,19 @@ describe('packModelsIntoNestingArea', () => {
 });
 
 describe('packModelsIntoTargetModel', () => {
-  it('keeps models that did not fit in model.models', () => {
+  it('keeps models that did not fit in model.models and returns svg', () => {
+    const sourceA = new makerjs.models.Rectangle(80, 80);
+    const sourceB = new makerjs.models.Rectangle(80, 80);
+
     const root: IModel = {
       models: {
         target: new makerjs.models.Rectangle(100, 100),
-        a: new makerjs.models.Rectangle(80, 80),
-        b: new makerjs.models.Rectangle(80, 80),
+        a: sourceA,
+        b: sourceB,
       },
     };
+
+    const beforeA = makerjs.measure.modelExtents(sourceA)!;
 
     const result = packModelsIntoTargetModel(root, 'target', {
       allowRotation: false,
@@ -97,8 +102,13 @@ describe('packModelsIntoTargetModel', () => {
     expect(result).not.toBeNull();
     expect(result?.packedIds.size).toBe(1);
     expect(result?.notFitIds.size).toBe(1);
+    expect(result?.svgString).toContain('<svg');
 
     expect(root.models).toBeDefined();
     expect(Object.keys(root.models ?? {}).sort()).toEqual(['a', 'b', 'target']);
+
+    const afterA = makerjs.measure.modelExtents(sourceA)!;
+    expect(afterA.low[0]).toBeCloseTo(beforeA.low[0], 6);
+    expect(afterA.low[1]).toBeCloseTo(beforeA.low[1], 6);
   });
 });
