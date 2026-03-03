@@ -37,6 +37,66 @@ const rectanglePart = (
   shape: rectangleShape(width, height),
 });
 
+const customPart = (id: string, shape: PolygonShape): NestPart => ({
+  id,
+  sourceModel: new makerjs.models.Rectangle(1, 1),
+  shape,
+});
+
+const circularContour = (
+  radius: number,
+  segments: number,
+  centerX = radius,
+  centerY = radius
+) =>
+  Array.from({ length: segments }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / segments;
+    return {
+      x: centerX + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  });
+
+const circularShape = (radius: number, segments = 48): PolygonShape =>
+  normalizeShape(createShape([circularContour(radius, segments)]));
+
+const circularRingShape = (
+  outerRadius: number,
+  innerRadius: number,
+  segments = 64
+): PolygonShape =>
+  normalizeShape(
+    createShape([
+      circularContour(outerRadius, segments),
+      circularContour(innerRadius, segments, outerRadius, outerRadius),
+    ])
+  );
+
+const frameShape = (
+  outerWidth: number,
+  outerHeight: number,
+  holeX: number,
+  holeY: number,
+  holeWidth: number,
+  holeHeight: number
+): PolygonShape =>
+  normalizeShape(
+    createShape([
+      [
+        { x: 0, y: 0 },
+        { x: outerWidth, y: 0 },
+        { x: outerWidth, y: outerHeight },
+        { x: 0, y: outerHeight },
+      ],
+      [
+        { x: holeX, y: holeY },
+        { x: holeX + holeWidth, y: holeY },
+        { x: holeX + holeWidth, y: holeY + holeHeight },
+        { x: holeX, y: holeY + holeHeight },
+      ],
+    ])
+  );
+
 const multiIslandShape = (
   islands: Array<{ x: number; y: number; width: number; height: number }>
 ): PolygonShape =>
@@ -413,5 +473,142 @@ describe('placePartsGreedy', () => {
     expect(baselinePlug!.y).toBeCloseTo(0, 6);
     expect(nfpPlug!.x).toBeCloseTo(40, 6);
     expect(nfpPlug!.y).toBeCloseTo(40, 6);
+  });
+
+  it('places a circle inside a ring hole when it fits', () => {
+    const bin = rectangleShape(160, 160);
+    const ring = customPart('ring', circularRingShape(60, 30));
+    const circle = customPart('circle', circularShape(14));
+
+    const result = placePartsGreedy([ring, circle], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(result.notPlacedIds).toHaveLength(0);
+
+    const ringPlacement = result.placements.find(
+      (placement) => placement.id === 'ring'
+    );
+    const circlePlacement = result.placements.find(
+      (placement) => placement.id === 'circle'
+    );
+
+    expect(ringPlacement).toBeDefined();
+    expect(circlePlacement).toBeDefined();
+    expect(
+      polygonsOverlap(ringPlacement!.shape, circlePlacement!.shape, 0)
+    ).toBe(false);
+
+    const ringCenter = {
+      x: ringPlacement!.x + 60,
+      y: ringPlacement!.y + 60,
+    };
+    const circleCenter = {
+      x:
+        circlePlacement!.shape.bounds.minX +
+        circlePlacement!.shape.bounds.width / 2,
+      y:
+        circlePlacement!.shape.bounds.minY +
+        circlePlacement!.shape.bounds.height / 2,
+    };
+
+    expect(
+      Math.hypot(circleCenter.x - ringCenter.x, circleCenter.y - ringCenter.y)
+    ).toBeLessThanOrEqual(16.01);
+  });
+
+  it('places a rectangle inside a frame hole when it fits', () => {
+    const bin = rectangleShape(100, 100);
+    const frame = customPart('frame', frameShape(100, 100, 30, 30, 40, 40));
+    const insert = rectanglePart('insert', 20, 20);
+
+    const result = placePartsGreedy([frame, insert], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(result.notPlacedIds).toHaveLength(0);
+
+    const framePlacement = result.placements.find(
+      (placement) => placement.id === 'frame'
+    );
+    const insertPlacement = result.placements.find(
+      (placement) => placement.id === 'insert'
+    );
+
+    expect(framePlacement).toBeDefined();
+    expect(insertPlacement).toBeDefined();
+
+    const relativeBounds = {
+      minX: insertPlacement!.shape.bounds.minX - framePlacement!.x,
+      maxX: insertPlacement!.shape.bounds.maxX - framePlacement!.x,
+      minY: insertPlacement!.shape.bounds.minY - framePlacement!.y,
+      maxY: insertPlacement!.shape.bounds.maxY - framePlacement!.y,
+    };
+
+    expect(relativeBounds.minX).toBeGreaterThanOrEqual(30 - 1e-6);
+    expect(relativeBounds.maxX).toBeLessThanOrEqual(70 + 1e-6);
+    expect(relativeBounds.minY).toBeGreaterThanOrEqual(30 - 1e-6);
+    expect(relativeBounds.maxY).toBeLessThanOrEqual(70 + 1e-6);
+  });
+
+  it('rejects a part that is too large for a hole', () => {
+    const bin = rectangleShape(100, 100);
+    const frame = customPart('frame', frameShape(100, 100, 30, 30, 40, 40));
+    const tooLarge = rectanglePart('too-large', 45, 45);
+
+    const result = placePartsGreedy([frame, tooLarge], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(
+      result.placements.some((placement) => placement.id === 'frame')
+    ).toBe(true);
+    expect(
+      result.placements.some((placement) => placement.id === 'too-large')
+    ).toBe(false);
+    expect(result.notPlacedIds).toEqual(['too-large']);
+  });
+
+  it('shrinks usable hole area when gap increases', () => {
+    const bin = rectangleShape(124, 124);
+    const frame = customPart('frame', frameShape(120, 120, 30, 30, 60, 60));
+    const insert = rectanglePart('insert', 58, 58);
+
+    const noGap = placePartsGreedy([frame, insert], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+    const withGap = placePartsGreedy([frame, insert], bin, {
+      gap: 2,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(noGap.notPlacedIds).toHaveLength(0);
+    expect(
+      withGap.placements.some((placement) => placement.id === 'frame')
+    ).toBe(true);
+    expect(withGap.notPlacedIds).toEqual(['insert']);
+  });
+
+  it('still places ordinary non-hole rectangular fixtures', () => {
+    const bin = rectangleShape(100, 50);
+    const parts = [rectanglePart('a', 60, 50), rectanglePart('b', 40, 50)];
+
+    const result = placePartsGreedy(parts, bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(result.notPlacedIds).toHaveLength(0);
+    expect(result.placements).toHaveLength(2);
   });
 });

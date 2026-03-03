@@ -4,7 +4,12 @@ import {
   isShapeInsideBin,
   polygonsOverlap,
 } from '@/lib/nesting/polygon-boolean';
-import { shapeBounds, translateShape } from '@/lib/nesting/polygon-math';
+import {
+  createShape,
+  polygonArea,
+  shapeBounds,
+  translateShape,
+} from '@/lib/nesting/polygon-math';
 import {
   normalizeRotations,
   normalizeShapeForRotation,
@@ -45,6 +50,12 @@ interface PlacedPartState {
   y: number;
   rotation: number;
   normalizedShape: PolygonShape;
+  holeRegions: HoleRegion[];
+  shape: PolygonShape;
+}
+
+interface HoleRegion {
+  id: string;
   shape: PolygonShape;
 }
 
@@ -155,6 +166,29 @@ const pairwiseVertexCandidates = (
 
   return candidates;
 };
+
+const extractHoleRegions = (shape: PolygonShape): HoleRegion[] =>
+  shape.contours
+    .map((contour, index) => {
+      if (polygonArea(contour) >= -NESTING_EPSILON) {
+        return null;
+      }
+
+      const holeShape = createShape([[...contour].reverse()]);
+
+      if (
+        holeShape.contours.length === 0 ||
+        holeShape.area <= NESTING_EPSILON
+      ) {
+        return null;
+      }
+
+      return {
+        id: `hole-${index}`,
+        shape: holeShape,
+      };
+    })
+    .filter((holeRegion): holeRegion is HoleRegion => holeRegion !== null);
 
 const fallbackAnchorPoints = (
   shape: PolygonShape,
@@ -354,6 +388,41 @@ export function placePartsGreedy(
             placedPart.y
           )
         );
+
+        placedPart.holeRegions.forEach((holeRegion) => {
+          const holeFit = nfpCache.getOrBuild(
+            {
+              stationaryId: `${placedPart.id}|${holeRegion.id}`,
+              movingId: part.id,
+              inside: true,
+              stationaryRotation: placedPart.rotation,
+              movingRotation: rotation,
+              gap: config.gap,
+            },
+            () =>
+              buildInnerFitPolygon(
+                holeRegion.shape,
+                normalizedShape,
+                config.gap
+              )
+          );
+
+          holeFit.points.forEach((point) => {
+            candidatePoints.push({
+              x: point.x + placedPart.x,
+              y: point.y + placedPart.y,
+            });
+          });
+
+          candidatePoints.push(
+            ...pairwiseVertexCandidates(
+              holeRegion.shape,
+              normalizedShape,
+              placedPart.x,
+              placedPart.y
+            )
+          );
+        });
       });
 
       const dedupedCandidates = limitCandidatePoints(
@@ -424,16 +493,19 @@ export function placePartsGreedy(
       continue;
     }
 
+    const placedNormalizedShape = getNormalizedShapeForRotation(
+      part,
+      bestCandidate.placement.rotation
+    );
+
     placements.push(bestCandidate.placement);
     placedParts.push({
       id: part.id,
       x: bestCandidate.placement.x,
       y: bestCandidate.placement.y,
       rotation: bestCandidate.placement.rotation,
-      normalizedShape: getNormalizedShapeForRotation(
-        part,
-        bestCandidate.placement.rotation
-      ),
+      normalizedShape: placedNormalizedShape,
+      holeRegions: extractHoleRegions(placedNormalizedShape),
       shape: bestCandidate.placement.shape,
     });
   }

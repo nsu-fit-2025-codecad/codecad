@@ -129,6 +129,10 @@ const isPointStrictlyInsidePolygon = (point: Point, shape: PolygonShape) =>
   pointInPolygon(point, shape) && !isPointOnShapeBoundary(point, shape);
 
 const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
+  const sourceMaterialInsideTarget = (point: Point) =>
+    pointInPolygon(point, source) &&
+    isPointStrictlyInsidePolygon(point, target);
+
   for (const contour of source.contours) {
     const centroid = contour.reduce(
       (acc, point) => ({
@@ -142,13 +146,13 @@ const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
       centroid.x /= contour.length;
       centroid.y /= contour.length;
 
-      if (isPointStrictlyInsidePolygon(centroid, target)) {
+      if (sourceMaterialInsideTarget(centroid)) {
         return true;
       }
     }
 
     for (const point of contour) {
-      if (isPointStrictlyInsidePolygon(point, target)) {
+      if (sourceMaterialInsideTarget(point)) {
         return true;
       }
     }
@@ -159,7 +163,7 @@ const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
         y: (start.y + end.y) / 2,
       };
 
-      if (isPointStrictlyInsidePolygon(midpoint, target)) {
+      if (sourceMaterialInsideTarget(midpoint)) {
         return true;
       }
     }
