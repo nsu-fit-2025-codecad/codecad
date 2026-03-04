@@ -31,6 +31,19 @@ describe('rotationCountToAngles', () => {
 });
 
 describe('resolveRotationSelection', () => {
+  it('forces no rotation when allowRotation is false even with rotationCount', () => {
+    expect(
+      resolveRotationSelection({
+        allowRotation: false,
+        rotationCount: 4,
+      })
+    ).toEqual({
+      rotationCount: 1,
+      displayRotationCount: 1,
+      rotations: [0],
+    });
+  });
+
   it('prefers rotationCount over legacy rotations', () => {
     expect(
       resolveRotationSelection({
@@ -39,13 +52,23 @@ describe('resolveRotationSelection', () => {
       })
     ).toEqual({
       rotationCount: 1,
+      displayRotationCount: 1,
       rotations: [0],
     });
   });
 
   it('keeps legacy default rotation set when only allowRotation is provided', () => {
     expect(resolveRotationSelection({ allowRotation: true })).toEqual({
-      rotationCount: 4,
+      rotationCount: null,
+      displayRotationCount: 4,
+      rotations: [0, 90],
+    });
+  });
+
+  it('does not infer a contradictory rotationCount for legacy [0,90] rotations', () => {
+    expect(resolveRotationSelection({ rotations: [0, 90] })).toEqual({
+      rotationCount: null,
+      displayRotationCount: 4,
       rotations: [0, 90],
     });
   });

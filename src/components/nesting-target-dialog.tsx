@@ -35,12 +35,12 @@ interface NestingTargetOption {
   height?: number;
 }
 
-const rotationCountFromOptions = (options: PackingOptions | undefined) =>
+const resolveRotationFromOptions = (options: PackingOptions | undefined) =>
   resolveRotationSelection({
     rotationCount: options?.rotationCount,
     rotations: options?.rotations,
     allowRotation: options?.allowRotation ?? true,
-  }).rotationCount;
+  });
 
 const formatRotationStep = (rotationCount: number) =>
   `${Number((360 / rotationCount).toFixed(2)).toString()}°`;
@@ -99,12 +99,18 @@ export const NestingTargetDialog = ({
   onOpenChange,
   onConfirm,
 }: NestingTargetDialogProps) => {
+  const initialRotationSelection = resolveRotationFromOptions(initialOptions);
   const [selectedTargetModelId, setSelectedTargetModelId] = useState<
     string | null
   >(initialTargetModelId);
   const [gapValue, setGapValue] = useState(String(initialOptions?.gap ?? 0));
   const [rotationCount, setRotationCount] = useState(
-    rotationCountFromOptions(initialOptions)
+    initialRotationSelection.displayRotationCount
+  );
+  const [legacyRotations, setLegacyRotations] = useState<number[] | null>(
+    initialRotationSelection.rotationCount === null
+      ? initialRotationSelection.rotations
+      : null
   );
   const [curveToleranceValue, setCurveToleranceValue] = useState(
     String(initialOptions?.curveTolerance ?? 1)
@@ -139,7 +145,14 @@ export const NestingTargetDialog = ({
 
     setSelectedTargetModelId(hasInitialTarget ? initialTargetModelId : null);
     setGapValue(String(initialOptions?.gap ?? 0));
-    setRotationCount(rotationCountFromOptions(initialOptions));
+    const resolvedRotationSelection =
+      resolveRotationFromOptions(initialOptions);
+    setRotationCount(resolvedRotationSelection.displayRotationCount);
+    setLegacyRotations(
+      resolvedRotationSelection.rotationCount === null
+        ? resolvedRotationSelection.rotations
+        : null
+    );
     setCurveToleranceValue(String(initialOptions?.curveTolerance ?? 1));
     setUseGeneticSearch(initialOptions?.useGeneticSearch ?? true);
     setPopulationSizeValue(String(initialOptions?.populationSize ?? 8));
@@ -169,7 +182,8 @@ export const NestingTargetDialog = ({
       rotationCount,
       MIN_ROTATION_COUNT
     );
-    const rotations = rotationCountToAngles(normalizedRotationCount);
+    const rotations =
+      legacyRotations ?? rotationCountToAngles(normalizedRotationCount);
     const normalizedCurveTolerance = parseAndClamp(
       curveToleranceValue,
       1,
@@ -198,8 +212,9 @@ export const NestingTargetDialog = ({
     );
 
     onConfirm(selectedTargetModelId, {
-      allowRotation: normalizedRotationCount > 1,
-      rotationCount: normalizedRotationCount,
+      allowRotation: rotations.length > 1,
+      rotationCount:
+        legacyRotations === null ? normalizedRotationCount : undefined,
       rotations,
       gap: normalizedGap,
       curveTolerance: normalizedCurveTolerance,
@@ -283,11 +298,12 @@ export const NestingTargetDialog = ({
                     <Slider
                       id="nesting-rotation-count"
                       value={[rotationCount]}
-                      onValueChange={(values) =>
+                      onValueChange={(values) => {
+                        setLegacyRotations(null);
                         setRotationCount(
                           normalizeRotationCount(values[0], rotationCount)
-                        )
-                      }
+                        );
+                      }}
                       min={MIN_ROTATION_COUNT}
                       max={MAX_ROTATION_COUNT}
                       step={1}

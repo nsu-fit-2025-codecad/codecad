@@ -39,7 +39,9 @@ const normalizeNumeric = (
   return Math.min(max, Math.max(min, value));
 };
 
-const normalizeNestingOptions = (options: PackingOptions): PackingOptions => {
+export const normalizeNestingOptions = (
+  options: PackingOptions
+): PackingOptions => {
   const resolvedRotationSelection = resolveRotationSelection({
     rotationCount: options.rotationCount,
     rotations: options.rotations,
@@ -51,8 +53,8 @@ const normalizeNestingOptions = (options: PackingOptions): PackingOptions => {
 
   return {
     gap: normalizeNumeric(options.gap, 0, 0),
-    allowRotation: resolvedRotationSelection.rotationCount > 1,
-    rotationCount: resolvedRotationSelection.rotationCount,
+    allowRotation: resolvedRotationSelection.rotations.length > 1,
+    rotationCount: resolvedRotationSelection.rotationCount ?? undefined,
     rotations: resolvedRotationSelection.rotations,
     curveTolerance: normalizeNumeric(options.curveTolerance, 1, 1e-6),
     searchStep:
