@@ -41,8 +41,17 @@ import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 
 const BIN_CACHE_ID = '__bin__';
 
+export interface PlacementProgressSnapshot {
+  processedParts: number;
+  totalParts: number;
+  placedParts: number;
+  placements: NestPlacement[];
+  notPlacedIds: string[];
+}
+
 export interface PlacePartsGreedyOptions {
   preserveInputOrder?: boolean;
+  onPartProcessed?: (snapshot: PlacementProgressSnapshot) => void;
 }
 
 export function placePartsGreedy(
@@ -82,6 +91,19 @@ export function placePartsGreedy(
     const normalized = normalizeShapeForRotation(sourcePart.shape, rotation);
     rotatedPartCache.set(cacheKey, normalized);
     return normalized;
+  };
+  const emitProgress = () => {
+    if (!options.onPartProcessed) {
+      return;
+    }
+
+    options.onPartProcessed({
+      processedParts: placements.length + notPlacedIds.length,
+      totalParts: orderedParts.length,
+      placedParts: placements.length,
+      placements: [...placements],
+      notPlacedIds: [...notPlacedIds],
+    });
   };
 
   for (const part of orderedParts) {
@@ -210,6 +232,7 @@ export function placePartsGreedy(
 
     if (!bestCandidate) {
       notPlacedIds.push(part.id);
+      emitProgress();
       continue;
     }
 
@@ -228,6 +251,7 @@ export function placePartsGreedy(
       holeRegions: extractHoleRegions(placedNormalizedShape),
       shape: bestCandidate.placement.shape,
     });
+    emitProgress();
   }
 
   return {

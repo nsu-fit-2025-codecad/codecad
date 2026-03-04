@@ -26,10 +26,16 @@ export interface PackingOptions {
 
 export type NestingAlgorithm = 'deterministic' | 'genetic';
 
+export interface NestingPreviewPayload {
+  svgString: string;
+  packedIds: string[];
+}
+
 export interface NestingProgress {
   phase: 'preparing' | 'placing' | 'genetic' | 'finalizing';
   progress: number;
   message: string;
+  preview?: NestingPreviewPayload;
   generation?: number;
   totalGenerations?: number;
   bestFitness?: FitnessScore;

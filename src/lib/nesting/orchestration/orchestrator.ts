@@ -4,13 +4,48 @@ import {
 } from '@/lib/nesting/genetic/fitness';
 import { runGeneticSearch } from '@/lib/nesting/genetic/genetic';
 import { decideGeneticExecution } from '@/lib/nesting/orchestration/genetic-policy';
+import { applyPlacementToModelMap } from '@/lib/nesting/orchestration/model-assembly';
 import { placePartsGreedy } from '@/lib/nesting/placement/place';
+import type { PlacementProgressSnapshot } from '@/lib/nesting/placement/place';
+import { renderModelToSvg } from '@/lib/svg-render';
 import type {
   EngineExecutionResult,
   PreparedNestInput,
 } from '@/lib/nesting/orchestration/runtime-types';
 import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runtime-types';
 import type { PackingRunCallbacks } from '@/lib/nesting';
+
+const buildDeterministicPreview = (
+  prepared: PreparedNestInput,
+  snapshot: PlacementProgressSnapshot
+) => {
+  const placedIds = new Set(
+    snapshot.placements.map((placement) => placement.id)
+  );
+  const notPlacedSet = new Set(snapshot.notPlacedIds);
+  const unresolvedIds = prepared.parts
+    .map((part) => part.id)
+    .filter((id) => !placedIds.has(id) && !notPlacedSet.has(id));
+  const assembled = applyPlacementToModelMap({
+    prepared,
+    placementResult: {
+      placements: snapshot.placements,
+      notPlacedIds: [...snapshot.notPlacedIds, ...unresolvedIds],
+    },
+  });
+  const previewModel = {
+    models: {
+      [prepared.targetModelId]: prepared.nestingArea,
+      ...assembled.packedModels,
+      ...assembled.didNotFitModels,
+    },
+  };
+
+  return {
+    svgString: renderModelToSvg(previewModel),
+    packedIds: Object.keys(assembled.packedModels),
+  };
+};
 
 export const runNestingEngine = (
   prepared: PreparedNestInput,
@@ -33,7 +68,22 @@ export const runNestingEngine = (
   const deterministicPlacementResult = placePartsGreedy(
     prepared.parts,
     prepared.nestingShape,
-    config
+    config,
+    {
+      onPartProcessed: (snapshot) => {
+        const ratio =
+          snapshot.totalParts > 0
+            ? snapshot.processedParts / snapshot.totalParts
+            : 1;
+
+        callbacks.onProgress?.({
+          phase: 'placing',
+          progress: 0.35 + ratio * 0.1,
+          message: `Placing parts (${snapshot.processedParts}/${snapshot.totalParts})`,
+          preview: buildDeterministicPreview(prepared, snapshot),
+        });
+      },
+    }
   );
   const deterministicFitness = evaluateNestFitness(
     deterministicPlacementResult,

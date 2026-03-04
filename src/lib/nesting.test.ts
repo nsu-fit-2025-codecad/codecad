@@ -281,6 +281,74 @@ describe('packModelsIntoNestingArea', () => {
     expect(progressEvents.length).toBeGreaterThan(0);
     expect(progressEvents[progressEvents.length - 1]).toBe(1);
   });
+
+  it('emits deterministic incremental progress with partial preview snapshots', () => {
+    const target = new makerjs.models.Rectangle(100, 100);
+    const sourceA = new makerjs.models.Rectangle(50, 50);
+    const sourceB = new makerjs.models.Rectangle(50, 50);
+
+    makerjs.model.moveRelative(sourceA, [12, 8]);
+    makerjs.model.moveRelative(sourceB, [32, 14]);
+    const beforeA = makerjs.measure.modelExtents(sourceA)!;
+    const beforeB = makerjs.measure.modelExtents(sourceB)!;
+    const progressEvents: Array<{
+      phase: string;
+      progress: number;
+      previewSvgString?: string;
+      previewPackedIds?: string[];
+    }> = [];
+
+    const result = packModelsIntoNestingArea(
+      target,
+      { a: sourceA, b: sourceB },
+      {
+        gap: 1,
+        useGeneticSearch: false,
+      },
+      {
+        onProgress: (progress) => {
+          progressEvents.push({
+            phase: progress.phase,
+            progress: progress.progress,
+            previewSvgString: progress.preview?.svgString,
+            previewPackedIds: progress.preview?.packedIds,
+          });
+        },
+      }
+    );
+
+    const placingEvents = progressEvents.filter(
+      (progressEvent) => progressEvent.phase === 'placing'
+    );
+    expect(placingEvents.length).toBeGreaterThan(1);
+    placingEvents.reduce((previous, current) => {
+      expect(current.progress).toBeGreaterThanOrEqual(previous);
+      return current.progress;
+    }, 0);
+
+    const previewEvents = placingEvents.filter(
+      (progressEvent) =>
+        typeof progressEvent.previewSvgString === 'string' &&
+        Array.isArray(progressEvent.previewPackedIds)
+    );
+    expect(previewEvents.length).toBeGreaterThan(0);
+    expect(previewEvents[0].previewSvgString).toContain('<svg');
+    expect(previewEvents[previewEvents.length - 1].previewPackedIds).toContain(
+      'a'
+    );
+    expect(Object.keys(result.packedModels).length).toBeGreaterThan(0);
+
+    const afterA = makerjs.measure.modelExtents(sourceA)!;
+    const afterB = makerjs.measure.modelExtents(sourceB)!;
+    expect(afterA.low[0]).toBeCloseTo(beforeA.low[0], 6);
+    expect(afterA.low[1]).toBeCloseTo(beforeA.low[1], 6);
+    expect(afterA.high[0]).toBeCloseTo(beforeA.high[0], 6);
+    expect(afterA.high[1]).toBeCloseTo(beforeA.high[1], 6);
+    expect(afterB.low[0]).toBeCloseTo(beforeB.low[0], 6);
+    expect(afterB.low[1]).toBeCloseTo(beforeB.low[1], 6);
+    expect(afterB.high[0]).toBeCloseTo(beforeB.high[0], 6);
+    expect(afterB.high[1]).toBeCloseTo(beforeB.high[1], 6);
+  });
 });
 
 describe('packModelsIntoTargetModel', () => {

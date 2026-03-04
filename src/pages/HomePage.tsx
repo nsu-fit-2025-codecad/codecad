@@ -19,6 +19,21 @@ export {
   shouldShowNestingStatus,
 } from '@/lib/nesting/controller/use-nesting-controller';
 
+interface ResolveDisplayedSvgInput {
+  committedSvg: string;
+  previewSvg: string | null;
+  isNestingRunning: boolean;
+}
+
+export const resolveDisplayedSvg = ({
+  committedSvg,
+  previewSvg,
+  isNestingRunning,
+}: ResolveDisplayedSvgInput) =>
+  isNestingRunning && typeof previewSvg === 'string'
+    ? previewSvg
+    : committedSvg;
+
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
   const [model, setModel] = useState<IModel | null>(null);
@@ -52,6 +67,7 @@ export const HomePage = () => {
     setIsDialogOpen,
     isRunning,
     progress,
+    previewSvg,
     stats,
     error,
     isStatusVisible,
@@ -150,7 +166,11 @@ export const HomePage = () => {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
       <WorkbenchLayout
-        svgString={svg}
+        svgString={resolveDisplayedSvg({
+          committedSvg: svg,
+          previewSvg,
+          isNestingRunning: isRunning,
+        })}
         selectedModelId={selectedModelId}
         onExecuteCode={evalInput}
       />
