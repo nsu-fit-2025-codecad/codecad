@@ -17,7 +17,6 @@ import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runti
 import type { PackingRunCallbacks } from '@/lib/nesting';
 
 const DETERMINISTIC_PREVIEW_PLACEMENT_STEP = 3;
-const GENETIC_PREVIEW_MIN_INTERVAL_MS = 200;
 
 const buildPreviewFromResult = (
   prepared: PreparedNestInput,
@@ -160,35 +159,45 @@ export const runNestingEngine = (
       seed: options.geneticSeed,
     },
     {
-      // Preview payloads are throttled to avoid rebuilding SVG every generation.
       onProgress: (() => {
-        let lastGeneticPreviewAt = 0;
-        let latestGeneticPreview:
+        const deterministicBaselinePreview = buildPreviewFromResult(
+          prepared,
+          deterministicPlacementResult
+        );
+        let currentBestGaPreview:
           | ReturnType<typeof buildPreviewFromResult>
           | undefined;
+        let currentBestGaPreviewKey: string | null = null;
+        let lastEmittedPreviewKey = 'deterministic';
 
         return (progress) => {
           const ratio =
             progress.totalGenerations > 0
               ? progress.generation / progress.totalGenerations
               : 1;
-          const now = Date.now();
 
-          if (progress.bestResult) {
-            latestGeneticPreview = buildPreviewFromResult(
-              prepared,
-              progress.bestResult
-            );
+          if (progress.bestImproved && progress.bestResult) {
+            if (
+              compareFitness(progress.bestFitness, deterministicFitness) < 0
+            ) {
+              currentBestGaPreview = buildPreviewFromResult(
+                prepared,
+                progress.bestResult
+              );
+              currentBestGaPreviewKey = `ga-${progress.evaluations}`;
+            } else {
+              currentBestGaPreview = undefined;
+              currentBestGaPreviewKey = null;
+            }
           }
 
+          const effectivePreviewKey =
+            currentBestGaPreviewKey ?? 'deterministic';
           const shouldEmitPreview =
-            typeof latestGeneticPreview !== 'undefined' &&
-            (Boolean(progress.bestImproved) ||
-              lastGeneticPreviewAt === 0 ||
-              now - lastGeneticPreviewAt >= GENETIC_PREVIEW_MIN_INTERVAL_MS);
+            effectivePreviewKey !== lastEmittedPreviewKey;
 
           if (shouldEmitPreview) {
-            lastGeneticPreviewAt = now;
+            lastEmittedPreviewKey = effectivePreviewKey;
           }
 
           callbacks.onProgress?.({
@@ -198,7 +207,9 @@ export const runNestingEngine = (
             generation: progress.generation,
             totalGenerations: progress.totalGenerations,
             bestFitness: progress.bestFitness,
-            preview: shouldEmitPreview ? latestGeneticPreview : undefined,
+            preview: shouldEmitPreview
+              ? (currentBestGaPreview ?? deterministicBaselinePreview)
+              : undefined,
           });
         };
       })(),

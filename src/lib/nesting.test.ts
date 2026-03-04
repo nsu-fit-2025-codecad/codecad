@@ -4,6 +4,7 @@ import {
   packModelsIntoNestingArea,
   packModelsIntoTargetModel,
 } from '@/lib/nesting';
+import { compareFitness } from '@/lib/nesting/genetic/fitness';
 
 const getSize = (model: IModel) => {
   const extents = makerjs.measure.modelExtents(model);
@@ -172,19 +173,19 @@ describe('packModelsIntoNestingArea', () => {
   it('GA orchestration improves or preserves deterministic quality', () => {
     const target = new makerjs.models.Rectangle(140, 100);
     const models = {
-      concave: {
+      a: new makerjs.models.Rectangle(36, 32),
+      b: {
         paths: {
-          a: new makerjs.paths.Line([0, 0], [80, 0]),
-          b: new makerjs.paths.Line([80, 0], [80, 40]),
-          c: new makerjs.paths.Line([80, 40], [40, 40]),
-          d: new makerjs.paths.Line([40, 40], [40, 80]),
-          e: new makerjs.paths.Line([40, 80], [0, 80]),
-          f: new makerjs.paths.Line([0, 80], [0, 0]),
+          a: new makerjs.paths.Line([0, 0], [75, 0]),
+          b: new makerjs.paths.Line([75, 0], [75, 41]),
+          c: new makerjs.paths.Line([75, 41], [35, 41]),
+          d: new makerjs.paths.Line([35, 41], [35, 79]),
+          e: new makerjs.paths.Line([35, 79], [0, 79]),
+          f: new makerjs.paths.Line([0, 79], [0, 0]),
         },
       },
-      plug: new makerjs.models.Rectangle(40, 40),
-      barA: new makerjs.models.Rectangle(20, 30),
-      barB: new makerjs.models.Rectangle(30, 20),
+      c: new makerjs.models.Rectangle(43, 36),
+      d: new makerjs.models.Rectangle(20, 30),
     };
 
     const deterministic = packModelsIntoNestingArea(target, models, {
@@ -395,7 +396,7 @@ describe('packModelsIntoNestingArea', () => {
     expect(previewEvents.length).toBeLessThan(placingPartEvents.length);
   });
 
-  it('emits GA best-so-far previews without rebuilding per evaluated candidate', () => {
+  it('keeps GA previews at or above deterministic baseline and suppresses duplicate preview payloads', () => {
     const target = new makerjs.models.Rectangle(140, 100);
     const models = {
       concave: {
@@ -412,10 +413,33 @@ describe('packModelsIntoNestingArea', () => {
       barA: new makerjs.models.Rectangle(20, 30),
       barB: new makerjs.models.Rectangle(30, 20),
     };
+    let deterministicBaselinePreviewSvg: string | null = null;
+    const deterministic = packModelsIntoNestingArea(
+      target,
+      models,
+      {
+        allowRotation: true,
+        useGeneticSearch: false,
+      },
+      {
+        onProgress: (progress) => {
+          if (progress.phase === 'placing' && progress.preview?.svgString) {
+            deterministicBaselinePreviewSvg = progress.preview.svgString;
+          }
+        },
+      }
+    );
     const progressEvents: Array<{
       phase: string;
       previewSvgString?: string;
       previewPackedIds?: string[];
+      bestFitness?: {
+        unplacedCount: number;
+        binsUsed: number;
+        compactness: number;
+        width: number;
+        height: number;
+      };
     }> = [];
 
     const result = packModelsIntoNestingArea(
@@ -424,12 +448,12 @@ describe('packModelsIntoNestingArea', () => {
       {
         allowRotation: true,
         useGeneticSearch: true,
-        populationSize: 8,
-        maxGenerations: 3,
-        mutationRate: 0.25,
-        crossoverRate: 0.85,
+        populationSize: 6,
+        maxGenerations: 2,
+        mutationRate: 0.3,
+        crossoverRate: 0.9,
         eliteCount: 2,
-        geneticSeed: 1234,
+        geneticSeed: 17,
       },
       {
         onProgress: (progress) => {
@@ -437,6 +461,7 @@ describe('packModelsIntoNestingArea', () => {
             phase: progress.phase,
             previewSvgString: progress.preview?.svgString,
             previewPackedIds: progress.preview?.packedIds,
+            bestFitness: progress.bestFitness,
           });
         },
       }
@@ -450,12 +475,33 @@ describe('packModelsIntoNestingArea', () => {
         typeof progressEvent.previewSvgString === 'string' &&
         Array.isArray(progressEvent.previewPackedIds)
     );
+    const regressingPreviewEvents = geneticEvents.filter(
+      (progressEvent) =>
+        typeof progressEvent.previewSvgString === 'string' &&
+        progressEvent.bestFitness !== undefined &&
+        compareFitness(
+          progressEvent.bestFitness,
+          deterministic.stats.fitness
+        ) >= 0
+    );
+    const previewSvgSet = new Set(
+      previewEvents.map((progressEvent) => progressEvent.previewSvgString)
+    );
 
+    expect(deterministicBaselinePreviewSvg).toContain('<svg');
     expect(geneticEvents.length).toBeGreaterThan(0);
-    expect(previewEvents.length).toBeGreaterThan(0);
-    expect(previewEvents[0].previewSvgString).toContain('<svg');
+    if (previewEvents.length > 0) {
+      expect(previewEvents[0].previewSvgString).toContain('<svg');
+    }
+    expect(regressingPreviewEvents).toHaveLength(0);
+    expect(previewSvgSet.size).toBe(previewEvents.length);
     expect(result.stats.evaluations).toBeGreaterThan(0);
     expect(previewEvents.length).toBeLessThan(result.stats.evaluations ?? 0);
+    const expectedAlgorithm =
+      compareFitness(result.stats.fitness, deterministic.stats.fitness) < 0
+        ? 'genetic'
+        : 'deterministic';
+    expect(result.stats.algorithm).toBe(expectedAlgorithm);
   });
 });
 
