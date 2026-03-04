@@ -205,6 +205,59 @@ describe('config hardening', () => {
 });
 
 describe('runGeneticSearch', () => {
+  it('emits best-so-far result snapshots only when the best fitness improves', () => {
+    const bin = rectangleShape(120, 80);
+    const parts = [
+      rectanglePart('a', 60, 30),
+      rectanglePart('b', 50, 30),
+      rectanglePart('c', 20, 20),
+    ];
+    const config = {
+      gap: 0,
+      rotations: [0, 90],
+      curveTolerance: 1,
+      searchStep: 1,
+    };
+    const snapshots: Array<{
+      bestImproved?: boolean;
+      bestResult?: NestResult;
+    }> = [];
+
+    runGeneticSearch(
+      parts,
+      bin,
+      config,
+      {
+        populationSize: 8,
+        maxGenerations: 3,
+        mutationRate: 0.25,
+        crossoverRate: 0.85,
+        eliteCount: 2,
+        seed: 1234,
+      },
+      {
+        onProgress: (snapshot) => {
+          snapshots.push({
+            bestImproved: snapshot.bestImproved,
+            bestResult: snapshot.bestResult,
+          });
+        },
+      }
+    );
+
+    expect(snapshots.length).toBe(4);
+    expect(snapshots[0].bestImproved).toBe(true);
+    expect(snapshots[0].bestResult).toBeDefined();
+    snapshots.forEach((snapshot) => {
+      if (snapshot.bestImproved) {
+        expect(snapshot.bestResult).toBeDefined();
+        return;
+      }
+
+      expect(snapshot.bestResult).toBeUndefined();
+    });
+  });
+
   it('strictly improves deterministic placement on a stable non-trivial fixture', () => {
     const bin = rectangleShape(140, 100);
     const concavePart: NestPart = {
