@@ -7,33 +7,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { NestingSettingsForm } from '@/components/nesting-settings-form';
 import {
-  Item,
-  ItemContent,
-  ItemGroup,
-  ItemHeader,
-  ItemTitle,
-} from '@/components/ui/item';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+  NestingTargetList,
+  type NestingTargetOption,
+} from '@/components/nesting-target-list';
 import {
-  MAX_ROTATION_COUNT,
-  MIN_ROTATION_COUNT,
   normalizeRotationCount,
   resolveRotationSelection,
   rotationCountToAngles,
-} from '@/lib/nesting/rotations';
-import { cn } from '@/lib/utils';
+} from '@/lib/nesting/polygon/rotations';
 import type { PackingOptions } from '@/lib/nesting';
-
-interface NestingTargetOption {
-  id: string;
-  width?: number;
-  height?: number;
-}
 
 const resolveRotationFromOptions = (options: PackingOptions | undefined) =>
   resolveRotationSelection({
@@ -41,17 +25,6 @@ const resolveRotationFromOptions = (options: PackingOptions | undefined) =>
     rotations: options?.rotations,
     allowRotation: options?.allowRotation ?? true,
   });
-
-const formatRotationStep = (rotationCount: number) =>
-  `${Number((360 / rotationCount).toFixed(2)).toString()}°`;
-
-const formatRotationLabel = (rotationCount: number) => {
-  if (rotationCount === 1) {
-    return '1 orientation (no rotation)';
-  }
-
-  return `${rotationCount} orientations (${formatRotationStep(rotationCount)} step)`;
-};
 
 const parseAndClamp = (
   value: string,
@@ -70,14 +43,6 @@ const parseAndClamp = (
   }
 
   return Math.min(max, Math.max(min, parsed));
-};
-
-const formatDimension = (value: number | undefined) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return '-';
-  }
-
-  return Number(value.toFixed(2)).toString();
 };
 
 interface NestingTargetDialogProps {
@@ -162,14 +127,6 @@ export const NestingTargetDialog = ({
     setEliteCountValue(String(initialOptions?.eliteCount ?? 2));
   }, [initialOptions, initialTargetModelId, models, open]);
 
-  const handleOpenChange = (isOpen: boolean) => {
-    onOpenChange(isOpen);
-  };
-
-  const handleCancel = () => {
-    handleOpenChange(false);
-  };
-
   const handleConfirm = () => {
     if (!selectedTargetModelId) {
       return;
@@ -178,10 +135,7 @@ export const NestingTargetDialog = ({
     const parsedGap = Number(gapValue);
     const normalizedGap =
       Number.isFinite(parsedGap) && parsedGap >= 0 ? parsedGap : 0;
-    const normalizedRotationCount = normalizeRotationCount(
-      rotationCount,
-      MIN_ROTATION_COUNT
-    );
+    const normalizedRotationCount = normalizeRotationCount(rotationCount, 1);
     const rotations =
       legacyRotations ?? rotationCountToAngles(normalizedRotationCount);
     const normalizedCurveTolerance = parseAndClamp(
@@ -225,289 +179,52 @@ export const NestingTargetDialog = ({
       crossoverRate: normalizedCrossoverRate,
       eliteCount: normalizedEliteCount,
     });
-    handleOpenChange(false);
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-h-[85vh] sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Nesting</DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1 md:overflow-hidden md:pr-0">
           <div className="grid min-h-full gap-4 md:h-full md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-            <div className="flex min-h-[14rem] flex-col rounded-md border border-border/70 bg-muted/10 md:min-h-0">
-              <div className="border-b border-border/70 px-3 py-2.5">
-                <h3 className="text-base leading-none font-semibold">Target</h3>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  Choose the shape that parts will be placed into.
-                </p>
-              </div>
-              <ScrollArea className="max-h-[60vh] md:min-h-0 md:flex-1">
-                <ItemGroup className="gap-2 p-3">
-                  {models.map((model) => {
-                    const isSelected = selectedTargetModelId === model.id;
-
-                    return (
-                      <Item
-                        key={model.id}
-                        onClick={() => setSelectedTargetModelId(model.id)}
-                        className={cn(
-                          'cursor-pointer px-3 py-2 border border-border/50 bg-background transition-[background-color,border-color,box-shadow] duration-150',
-                          isSelected && 'bg-accent border-border shadow-xs',
-                          !isSelected &&
-                            'hover:bg-accent/20 hover:border-border'
-                        )}
-                      >
-                        <ItemHeader>
-                          <ItemContent className="gap-0.5">
-                            <ItemTitle>{model.id}</ItemTitle>
-                            <p className="text-xs text-muted-foreground">
-                              W: {formatDimension(model.width)}, H:{' '}
-                              {formatDimension(model.height)}
-                            </p>
-                          </ItemContent>
-                        </ItemHeader>
-                      </Item>
-                    );
-                  })}
-                </ItemGroup>
-              </ScrollArea>
-            </div>
-            <div className="flex min-h-[18rem] flex-col rounded-md border border-border/70 bg-muted/10 md:min-h-0">
-              <div className="border-b border-border/70 px-3 py-2.5">
-                <h3 className="text-base leading-none font-semibold">
-                  Nesting Settings
-                </h3>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  Applied to this nesting run.
-                </p>
-              </div>
-              <ScrollArea className="max-h-[60vh] md:min-h-0 md:flex-1">
-                <div className="space-y-4 p-3">
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="nesting-rotation-count"
-                      className="text-sm font-medium"
-                    >
-                      Part rotations
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {formatRotationLabel(rotationCount)}
-                    </p>
-                    <Slider
-                      id="nesting-rotation-count"
-                      value={[rotationCount]}
-                      onValueChange={(values) => {
-                        setLegacyRotations(null);
-                        setRotationCount(
-                          normalizeRotationCount(values[0], rotationCount)
-                        );
-                      }}
-                      min={MIN_ROTATION_COUNT}
-                      max={MAX_ROTATION_COUNT}
-                      step={1}
-                      disabled={isNesting}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Higher values try more angles and may improve fit, but run
-                      slower.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="nesting-gap"
-                      className="text-sm font-medium"
-                    >
-                      Part spacing (gap)
-                    </Label>
-                    <Input
-                      id="nesting-gap"
-                      type="number"
-                      min={0}
-                      step="0.1"
-                      value={gapValue}
-                      onChange={(event) => setGapValue(event.target.value)}
-                      disabled={isNesting}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Minimum clearance between parts in model units.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label
-                      htmlFor="nesting-curve-tolerance"
-                      className="text-sm font-medium"
-                    >
-                      Curve detail tolerance
-                    </Label>
-                    <Input
-                      id="nesting-curve-tolerance"
-                      type="number"
-                      min={0.000001}
-                      step="0.1"
-                      value={curveToleranceValue}
-                      onChange={(event) =>
-                        setCurveToleranceValue(event.target.value)
-                      }
-                      disabled={isNesting}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Lower values follow curves more closely but can run
-                      slower.
-                    </p>
-                  </div>
-                  <div className="space-y-3 rounded-md border border-border/70 bg-background/70 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <Label
-                        htmlFor="nesting-use-ga"
-                        className="text-sm font-medium cursor-pointer"
-                      >
-                        Use genetic algorithm
-                      </Label>
-                      <Checkbox
-                        id="nesting-use-ga"
-                        checked={useGeneticSearch}
-                        onCheckedChange={(checked) =>
-                          setUseGeneticSearch(checked === true)
-                        }
-                        disabled={isNesting}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Slower, often better fit.
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label
-                          htmlFor="nesting-population-size"
-                          className="text-xs font-medium"
-                        >
-                          Population size
-                        </Label>
-                        <Input
-                          id="nesting-population-size"
-                          type="number"
-                          min={2}
-                          max={200}
-                          step="1"
-                          value={populationSizeValue}
-                          onChange={(event) =>
-                            setPopulationSizeValue(event.target.value)
-                          }
-                          disabled={!useGeneticSearch || isNesting}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Number of candidate layouts evaluated per generation.
-                          Larger values can improve quality but increase
-                          runtime.
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label
-                          htmlFor="nesting-max-generations"
-                          className="text-xs font-medium"
-                        >
-                          Generations
-                        </Label>
-                        <Input
-                          id="nesting-max-generations"
-                          type="number"
-                          min={1}
-                          max={500}
-                          step="1"
-                          value={maxGenerationsValue}
-                          onChange={(event) =>
-                            setMaxGenerationsValue(event.target.value)
-                          }
-                          disabled={!useGeneticSearch || isNesting}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Number of evolution rounds to run before stopping.
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label
-                          htmlFor="nesting-mutation-rate"
-                          className="text-xs font-medium"
-                        >
-                          Mutation rate
-                        </Label>
-                        <Input
-                          id="nesting-mutation-rate"
-                          type="number"
-                          min={0}
-                          max={1}
-                          step="0.01"
-                          value={mutationRateValue}
-                          onChange={(event) =>
-                            setMutationRateValue(event.target.value)
-                          }
-                          disabled={!useGeneticSearch || isNesting}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Probability of random variation applied to offspring.
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label
-                          htmlFor="nesting-crossover-rate"
-                          className="text-xs font-medium"
-                        >
-                          Crossover rate
-                        </Label>
-                        <Input
-                          id="nesting-crossover-rate"
-                          type="number"
-                          min={0}
-                          max={1}
-                          step="0.01"
-                          value={crossoverRateValue}
-                          onChange={(event) =>
-                            setCrossoverRateValue(event.target.value)
-                          }
-                          disabled={!useGeneticSearch || isNesting}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Probability of combining two parent layouts into a new
-                          candidate.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label
-                        htmlFor="nesting-elite-count"
-                        className="text-xs font-medium"
-                      >
-                        Elite count
-                      </Label>
-                      <Input
-                        id="nesting-elite-count"
-                        type="number"
-                        min={1}
-                        max={200}
-                        step="1"
-                        value={eliteCountValue}
-                        onChange={(event) =>
-                          setEliteCountValue(event.target.value)
-                        }
-                        disabled={!useGeneticSearch || isNesting}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Number of top layouts copied unchanged to the next
-                        generation.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
+            <NestingTargetList
+              models={models}
+              selectedTargetModelId={selectedTargetModelId}
+              onSelect={setSelectedTargetModelId}
+            />
+            <NestingSettingsForm
+              rotationCount={rotationCount}
+              gapValue={gapValue}
+              curveToleranceValue={curveToleranceValue}
+              useGeneticSearch={useGeneticSearch}
+              populationSizeValue={populationSizeValue}
+              maxGenerationsValue={maxGenerationsValue}
+              mutationRateValue={mutationRateValue}
+              crossoverRateValue={crossoverRateValue}
+              eliteCountValue={eliteCountValue}
+              isNesting={isNesting}
+              onRotationCountChange={(value) => {
+                setLegacyRotations(null);
+                setRotationCount(value);
+              }}
+              onGapChange={setGapValue}
+              onCurveToleranceChange={setCurveToleranceValue}
+              onUseGeneticSearchChange={setUseGeneticSearch}
+              onPopulationSizeChange={setPopulationSizeValue}
+              onMaxGenerationsChange={setMaxGenerationsValue}
+              onMutationRateChange={setMutationRateValue}
+              onCrossoverRateChange={setCrossoverRateValue}
+              onEliteCountChange={setEliteCountValue}
+            />
           </div>
         </div>
         <DialogFooter className="mt-2 shrink-0 border-t border-border/70 pt-3">
           <Button
             variant="outline"
-            onClick={handleCancel}
+            onClick={() => onOpenChange(false)}
             className="w-25"
             disabled={isNesting}
           >

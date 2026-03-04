@@ -162,6 +162,7 @@ describe('packModelsIntoNestingArea', () => {
     const result = packModelsIntoNestingArea(target, models, {
       allowRotation: true,
       gap: 1,
+      useGeneticSearch: false,
     });
 
     expect(result.packedModels.ring).toBeDefined();

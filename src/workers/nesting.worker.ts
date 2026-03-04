@@ -2,14 +2,14 @@ import { packModelsIntoTargetModel } from '@/lib/nesting';
 import type {
   NestingWorkerRequest,
   NestingWorkerResponse,
-} from '@/lib/nesting/worker-client';
+} from '@/lib/nesting/worker/worker-protocol';
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<NestingWorkerRequest>) => void) | null;
   postMessage: (message: NestingWorkerResponse) => void;
 }
 
-const workerContext = self as unknown as WorkerScope;
+const workerContext = self as WorkerScope;
 
 workerContext.onmessage = (event: MessageEvent<NestingWorkerRequest>) => {
   const message = event.data;
