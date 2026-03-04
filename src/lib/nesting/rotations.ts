@@ -13,7 +13,8 @@ export interface RotationSelectionInput {
 }
 
 export interface RotationSelection {
-  rotationCount: number;
+  rotationCount: number | null;
+  displayRotationCount: number;
   rotations: number[];
 }
 
@@ -67,42 +68,29 @@ export const rotationCountToAngles = (rotationCount: number): number[] => {
 };
 
 const inferRotationCountFromRotations = (
-  rotations: number[],
-  allowRotation: boolean
-): number => {
-  if (rotations.length === 1 && Math.abs(rotations[0]) <= ROTATION_EPSILON) {
-    return MIN_ROTATION_COUNT;
-  }
-
-  const signature = rotations.map((rotation) => rotation.toFixed(6)).join(',');
-
-  if (
-    signature === '0.000000,90.000000' ||
-    signature === '0.000000,90.000000,180.000000,270.000000'
+  rotations: number[]
+): number | null => {
+  for (
+    let count = MIN_ROTATION_COUNT;
+    count <= MAX_ROTATION_COUNT;
+    count += 1
   ) {
-    return 4;
-  }
+    const expected = rotationCountToAngles(count);
 
-  if (signature === '0.000000,180.000000') {
-    return 2;
-  }
+    if (expected.length !== rotations.length) {
+      continue;
+    }
 
-  if (
-    rotations[0] === 0 &&
-    rotations.length >= MIN_ROTATION_COUNT &&
-    rotations.length <= MAX_ROTATION_COUNT
-  ) {
-    const expected = rotationCountToAngles(rotations.length);
     const matches = expected.every(
       (angle, index) => Math.abs(angle - rotations[index]) <= ROTATION_EPSILON
     );
 
     if (matches) {
-      return rotations.length;
+      return count;
     }
   }
 
-  return allowRotation ? DEFAULT_ROTATION_COUNT : MIN_ROTATION_COUNT;
+  return null;
 };
 
 export const resolveRotationSelection = ({
@@ -110,14 +98,23 @@ export const resolveRotationSelection = ({
   rotations,
   allowRotation = true,
 }: RotationSelectionInput): RotationSelection => {
+  if (!allowRotation) {
+    return {
+      rotationCount: MIN_ROTATION_COUNT,
+      displayRotationCount: MIN_ROTATION_COUNT,
+      rotations: [0],
+    };
+  }
+
   if (typeof rotationCount === 'number' && Number.isFinite(rotationCount)) {
     const normalizedCount = normalizeRotationCount(
       rotationCount,
-      allowRotation ? DEFAULT_ROTATION_COUNT : MIN_ROTATION_COUNT
+      DEFAULT_ROTATION_COUNT
     );
 
     return {
       rotationCount: normalizedCount,
+      displayRotationCount: normalizedCount,
       rotations: rotationCountToAngles(normalizedCount),
     };
   }
@@ -129,23 +126,20 @@ export const resolveRotationSelection = ({
     : [];
 
   if (normalizedRotations.length > 0) {
+    const inferredRotationCount =
+      inferRotationCountFromRotations(normalizedRotations);
+
     return {
-      rotationCount: inferRotationCountFromRotations(
-        normalizedRotations,
-        allowRotation
-      ),
+      rotationCount: inferredRotationCount,
+      displayRotationCount: inferredRotationCount ?? DEFAULT_ROTATION_COUNT,
       rotations: normalizedRotations,
     };
   }
 
-  const fallbackCount = allowRotation
-    ? DEFAULT_ROTATION_COUNT
-    : MIN_ROTATION_COUNT;
-  const fallbackRotations = allowRotation ? [0, 90] : [0];
-
   return {
-    rotationCount: fallbackCount,
-    rotations: fallbackRotations,
+    rotationCount: null,
+    displayRotationCount: DEFAULT_ROTATION_COUNT,
+    rotations: [0, 90],
   };
 };
 

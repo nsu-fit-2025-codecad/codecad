@@ -54,7 +54,7 @@ describe('packModelsIntoNestingArea', () => {
     const withoutRotation = packModelsIntoNestingArea(
       target,
       { part },
-      { allowRotation: false }
+      { allowRotation: false, rotationCount: 4 }
     );
 
     expect(Object.keys(withoutRotation.packedModels)).toHaveLength(0);

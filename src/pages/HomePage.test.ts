@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  normalizeNestingOptions,
   shouldApplyNestingWorkerResult,
   shouldShowNestingStatus,
 } from '@/pages/HomePage';
@@ -83,5 +84,38 @@ describe('shouldShowNestingStatus', () => {
         error: 'Nesting failed unexpectedly.',
       })
     ).toBe(true);
+  });
+});
+
+describe('normalizeNestingOptions', () => {
+  it('keeps no rotation when allowRotation is false even if rotationCount is larger', () => {
+    const normalized = normalizeNestingOptions({
+      allowRotation: false,
+      rotationCount: 4,
+    });
+
+    expect(normalized.allowRotation).toBe(false);
+    expect(normalized.rotationCount).toBe(1);
+    expect(normalized.rotations).toEqual([0]);
+  });
+
+  it('preserves legacy allowRotation=true fallback without persisting contradictory rotationCount', () => {
+    const normalized = normalizeNestingOptions({
+      allowRotation: true,
+    });
+
+    expect(normalized.allowRotation).toBe(true);
+    expect(normalized.rotationCount).toBeUndefined();
+    expect(normalized.rotations).toEqual([0, 90]);
+  });
+
+  it('keeps legacy fallback stable when rehydrated and normalized again', () => {
+    const first = normalizeNestingOptions({ allowRotation: true });
+    const second = normalizeNestingOptions(first);
+
+    expect(first.rotations).toEqual([0, 90]);
+    expect(first.rotationCount).toBeUndefined();
+    expect(second.rotations).toEqual([0, 90]);
+    expect(second.rotationCount).toBeUndefined();
   });
 });
