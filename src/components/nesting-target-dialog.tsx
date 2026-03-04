@@ -18,17 +18,16 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  MAX_ROTATION_COUNT,
+  MIN_ROTATION_COUNT,
+  normalizeRotationCount,
+  resolveRotationSelection,
+  rotationCountToAngles,
+} from '@/lib/nesting/rotations';
 import { cn } from '@/lib/utils';
 import type { PackingOptions } from '@/lib/nesting';
-
-type RotationPreset = 'none' | 'orthogonal' | 'quarter-turns';
 
 interface NestingTargetOption {
   id: string;
@@ -36,34 +35,22 @@ interface NestingTargetOption {
   height?: number;
 }
 
-const rotationPresetFromOptions = (
-  options: PackingOptions | undefined
-): RotationPreset => {
-  const rotations = Array.isArray(options?.rotations)
-    ? [
-        ...new Set(
-          options.rotations.map((rotation) => ((rotation % 360) + 360) % 360)
-        ),
-      ]
-    : null;
+const rotationCountFromOptions = (options: PackingOptions | undefined) =>
+  resolveRotationSelection({
+    rotationCount: options?.rotationCount,
+    rotations: options?.rotations,
+    allowRotation: options?.allowRotation ?? true,
+  }).rotationCount;
 
-  if (rotations && rotations.length > 0) {
-    const normalized = rotations.sort((left, right) => left - right).join(',');
+const formatRotationStep = (rotationCount: number) =>
+  `${Number((360 / rotationCount).toFixed(2)).toString()}°`;
 
-    if (normalized === '0') {
-      return 'none';
-    }
-
-    if (normalized === '0,90') {
-      return 'orthogonal';
-    }
-
-    if (normalized === '0,90,180,270') {
-      return 'quarter-turns';
-    }
+const formatRotationLabel = (rotationCount: number) => {
+  if (rotationCount === 1) {
+    return '1 orientation (no rotation)';
   }
 
-  return (options?.allowRotation ?? true) ? 'orthogonal' : 'none';
+  return `${rotationCount} orientations (${formatRotationStep(rotationCount)} step)`;
 };
 
 const parseAndClamp = (
@@ -116,8 +103,8 @@ export const NestingTargetDialog = ({
     string | null
   >(initialTargetModelId);
   const [gapValue, setGapValue] = useState(String(initialOptions?.gap ?? 0));
-  const [rotationPreset, setRotationPreset] = useState<RotationPreset>(
-    rotationPresetFromOptions(initialOptions)
+  const [rotationCount, setRotationCount] = useState(
+    rotationCountFromOptions(initialOptions)
   );
   const [curveToleranceValue, setCurveToleranceValue] = useState(
     String(initialOptions?.curveTolerance ?? 1)
@@ -152,7 +139,7 @@ export const NestingTargetDialog = ({
 
     setSelectedTargetModelId(hasInitialTarget ? initialTargetModelId : null);
     setGapValue(String(initialOptions?.gap ?? 0));
-    setRotationPreset(rotationPresetFromOptions(initialOptions));
+    setRotationCount(rotationCountFromOptions(initialOptions));
     setCurveToleranceValue(String(initialOptions?.curveTolerance ?? 1));
     setUseGeneticSearch(initialOptions?.useGeneticSearch ?? true);
     setPopulationSizeValue(String(initialOptions?.populationSize ?? 8));
@@ -178,12 +165,11 @@ export const NestingTargetDialog = ({
     const parsedGap = Number(gapValue);
     const normalizedGap =
       Number.isFinite(parsedGap) && parsedGap >= 0 ? parsedGap : 0;
-    const rotations =
-      rotationPreset === 'none'
-        ? [0]
-        : rotationPreset === 'quarter-turns'
-          ? [0, 90, 180, 270]
-          : [0, 90];
+    const normalizedRotationCount = normalizeRotationCount(
+      rotationCount,
+      MIN_ROTATION_COUNT
+    );
+    const rotations = rotationCountToAngles(normalizedRotationCount);
     const normalizedCurveTolerance = parseAndClamp(
       curveToleranceValue,
       1,
@@ -212,7 +198,8 @@ export const NestingTargetDialog = ({
     );
 
     onConfirm(selectedTargetModelId, {
-      allowRotation: rotations.length > 1,
+      allowRotation: normalizedRotationCount > 1,
+      rotationCount: normalizedRotationCount,
       rotations,
       gap: normalizedGap,
       curveTolerance: normalizedCurveTolerance,
@@ -285,29 +272,31 @@ export const NestingTargetDialog = ({
                 <div className="space-y-4 p-3">
                   <div className="space-y-1.5">
                     <Label
-                      htmlFor="nesting-rotation-preset"
+                      htmlFor="nesting-rotation-count"
                       className="text-sm font-medium"
                     >
-                      Allowed rotations
+                      Part rotations
                     </Label>
-                    <Select
-                      value={rotationPreset}
-                      onValueChange={(value) =>
-                        setRotationPreset(value as RotationPreset)
+                    <p className="text-sm text-muted-foreground">
+                      {formatRotationLabel(rotationCount)}
+                    </p>
+                    <Slider
+                      id="nesting-rotation-count"
+                      value={[rotationCount]}
+                      onValueChange={(values) =>
+                        setRotationCount(
+                          normalizeRotationCount(values[0], rotationCount)
+                        )
                       }
+                      min={MIN_ROTATION_COUNT}
+                      max={MAX_ROTATION_COUNT}
+                      step={1}
                       disabled={isNesting}
-                    >
-                      <SelectTrigger id="nesting-rotation-preset">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No rotation</SelectItem>
-                        <SelectItem value="orthogonal">90°</SelectItem>
-                        <SelectItem value="quarter-turns">
-                          90°, 180°, 270°
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Higher values try more angles and may improve fit, but run
+                      slower.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <Label

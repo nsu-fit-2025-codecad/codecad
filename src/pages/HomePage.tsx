@@ -19,6 +19,7 @@ import type {
   NestingRunStats,
   PackingOptions,
 } from '@/lib/nesting';
+import { resolveRotationSelection } from '@/lib/nesting/rotations';
 import { renderModelToSvg } from '@/lib/svg-render';
 
 const normalizeNumeric = (
@@ -39,30 +40,20 @@ const normalizeNumeric = (
 };
 
 const normalizeNestingOptions = (options: PackingOptions): PackingOptions => {
-  const allowRotation = options.allowRotation ?? true;
-  const normalizedRotations = Array.isArray(options.rotations)
-    ? Array.from(
-        new Set(
-          options.rotations
-            .filter((rotation) => Number.isFinite(rotation))
-            .map((rotation) => ((rotation % 360) + 360) % 360)
-        )
-      )
-    : [];
-  const rotations =
-    normalizedRotations.length > 0
-      ? normalizedRotations
-      : allowRotation
-        ? [0, 90]
-        : [0];
+  const resolvedRotationSelection = resolveRotationSelection({
+    rotationCount: options.rotationCount,
+    rotations: options.rotations,
+    allowRotation: options.allowRotation ?? true,
+  });
   const populationSize = Math.round(
     normalizeNumeric(options.populationSize, 8, 2, 200)
   );
 
   return {
     gap: normalizeNumeric(options.gap, 0, 0),
-    allowRotation: rotations.length > 1,
-    rotations,
+    allowRotation: resolvedRotationSelection.rotationCount > 1,
+    rotationCount: resolvedRotationSelection.rotationCount,
+    rotations: resolvedRotationSelection.rotations,
     curveTolerance: normalizeNumeric(options.curveTolerance, 1, 1e-6),
     searchStep:
       options.searchStep === undefined
@@ -124,8 +115,7 @@ export const HomePage = () => {
     useState(false);
   const [nestingOptions, setNestingOptions] = useState<PackingOptions>(() =>
     normalizeNestingOptions({
-      allowRotation: true,
-      rotations: [0, 90],
+      rotationCount: 4,
       gap: 0,
       curveTolerance: 1,
       useGeneticSearch: true,

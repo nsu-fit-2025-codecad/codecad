@@ -74,6 +74,33 @@ describe('packModelsIntoNestingArea', () => {
     expect(size.height).toBeCloseTo(70, 6);
   });
 
+  it('resolves rotationCount into discrete orientation sets', () => {
+    const target = new makerjs.models.Rectangle(100, 80);
+    const part = new makerjs.models.Rectangle(70, 90);
+
+    const oneOrientation = packModelsIntoNestingArea(
+      target,
+      { part },
+      {
+        rotationCount: 1,
+        useGeneticSearch: false,
+      }
+    );
+    const quarterTurns = packModelsIntoNestingArea(
+      target,
+      { part },
+      {
+        rotationCount: 4,
+        useGeneticSearch: false,
+      }
+    );
+
+    expect(Object.keys(oneOrientation.packedModels)).toHaveLength(0);
+    expect(Object.keys(oneOrientation.didNotFitModels)).toEqual(['part']);
+    expect(Object.keys(quarterTurns.packedModels)).toEqual(['part']);
+    expect(Object.keys(quarterTurns.didNotFitModels)).toHaveLength(0);
+  });
+
   it('respects configured gap between parts', () => {
     const target = new makerjs.models.Rectangle(100, 100);
     const models = {
