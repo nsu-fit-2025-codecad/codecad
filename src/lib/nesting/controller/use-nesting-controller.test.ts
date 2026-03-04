@@ -152,4 +152,43 @@ describe('reduceNestingPreviewStateWithGuard', () => {
     expect(staleTwice.svgString).toBeNull();
     expect(staleTwice.packedIds.size).toBe(0);
   });
+
+  it('ignores stale GA preview updates after model revision changes', () => {
+    const withDeterministicPreview = reduceNestingPreviewState(
+      createEmptyNestingPreviewState(),
+      {
+        type: 'progress',
+        progress: {
+          phase: 'placing',
+          progress: 0.45,
+          message: 'Placing',
+          preview: {
+            svgString: '<svg id="preview-deterministic"/>',
+            packedIds: ['a', 'b'],
+          },
+        },
+      }
+    );
+    const staleGaPreview = reduceNestingPreviewStateWithGuard(
+      withDeterministicPreview,
+      {
+        runToken: 'run-2',
+        activeRunToken: 'run-2',
+        modelRevisionAtRunStart: 7,
+        currentModelRevision: 8,
+        progress: {
+          phase: 'genetic',
+          progress: 0.62,
+          message: 'Running genetic search',
+          preview: {
+            svgString: '<svg id="preview-stale-ga"/>',
+            packedIds: ['a', 'b', 'c'],
+          },
+        },
+      }
+    );
+
+    expect(staleGaPreview.svgString).toBeNull();
+    expect(staleGaPreview.packedIds.size).toBe(0);
+  });
 });
