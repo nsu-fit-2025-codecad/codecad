@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   normalizeNestingOptions,
+  resolveDisplayedSvg,
   shouldApplyNestingWorkerResult,
   shouldShowNestingStatus,
 } from '@/pages/HomePage';
@@ -117,5 +118,27 @@ describe('normalizeNestingOptions', () => {
     expect(first.rotationCount).toBeUndefined();
     expect(second.rotations).toEqual([0, 90]);
     expect(second.rotationCount).toBeUndefined();
+  });
+});
+
+describe('resolveDisplayedSvg', () => {
+  it('shows preview svg while nesting is running', () => {
+    expect(
+      resolveDisplayedSvg({
+        committedSvg: '<svg id="final"/>',
+        previewSvg: '<svg id="preview"/>',
+        isNestingRunning: true,
+      })
+    ).toBe('<svg id="preview"/>');
+  });
+
+  it('shows committed svg after nesting completes', () => {
+    expect(
+      resolveDisplayedSvg({
+        committedSvg: '<svg id="final"/>',
+        previewSvg: '<svg id="preview"/>',
+        isNestingRunning: false,
+      })
+    ).toBe('<svg id="final"/>');
   });
 });

@@ -307,6 +307,52 @@ describe('placePartsGreedy', () => {
     ]);
   });
 
+  it('emits incremental snapshots while evaluating deterministic placements', () => {
+    const bin = rectangleShape(100, 100);
+    const parts = [rectanglePart('a', 50, 50), rectanglePart('b', 50, 50)];
+    const snapshots: Array<{
+      processedParts: number;
+      totalParts: number;
+      placedParts: number;
+      notPlacedIds: string[];
+      placementIds: string[];
+    }> = [];
+
+    const result = placePartsGreedy(
+      parts,
+      bin,
+      {
+        gap: 1,
+        rotations: [0],
+        curveTolerance: 1,
+        searchStep: 1,
+      },
+      {
+        onPartProcessed: (snapshot) => {
+          snapshots.push({
+            processedParts: snapshot.processedParts,
+            totalParts: snapshot.totalParts,
+            placedParts: snapshot.placedParts,
+            notPlacedIds: [...snapshot.notPlacedIds],
+            placementIds: snapshot.placements.map((placement) => placement.id),
+          });
+        },
+      }
+    );
+
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots.map((snapshot) => snapshot.processedParts)).toEqual([
+      1, 2,
+    ]);
+    expect(snapshots.map((snapshot) => snapshot.totalParts)).toEqual([2, 2]);
+    expect(snapshots[0].placedParts).toBe(1);
+    expect(snapshots[0].notPlacedIds).toEqual([]);
+    expect(snapshots[1].placedParts).toBe(1);
+    expect(snapshots[1].notPlacedIds).toEqual(['b']);
+    expect(snapshots[1].placementIds).toEqual(['a']);
+    expect(result.notPlacedIds).toEqual(['b']);
+  });
+
   it('honors configured gap in placement results', () => {
     const bin = rectangleShape(100, 100);
     const parts = [rectanglePart('a', 50, 50), rectanglePart('b', 50, 50)];

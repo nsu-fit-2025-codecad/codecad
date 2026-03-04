@@ -42,6 +42,47 @@ export const shouldShowNestingStatus = ({
 }: NestingStatusVisibilityInput) =>
   isRunning || (!isDismissed && (stats !== null || error !== null));
 
+export interface NestingPreviewState {
+  svgString: string | null;
+  packedIds: Set<string>;
+}
+
+interface NestingPreviewProgressEvent {
+  type: 'progress';
+  progress: NestingProgress;
+}
+
+interface NestingPreviewResetEvent {
+  type: 'reset';
+}
+
+type NestingPreviewEvent =
+  | NestingPreviewProgressEvent
+  | NestingPreviewResetEvent;
+
+export const createEmptyNestingPreviewState = (): NestingPreviewState => ({
+  svgString: null,
+  packedIds: new Set<string>(),
+});
+
+export const reduceNestingPreviewState = (
+  state: NestingPreviewState,
+  event: NestingPreviewEvent
+): NestingPreviewState => {
+  if (event.type === 'reset') {
+    return createEmptyNestingPreviewState();
+  }
+
+  if (!event.progress.preview) {
+    return state;
+  }
+
+  return {
+    svgString: event.progress.preview.svgString,
+    packedIds: new Set(event.progress.preview.packedIds),
+  };
+};
+
 export interface UseNestingControllerInput {
   model: IModel | null;
   updateFitStatus: (packedIds: Set<string>, notFitIds: Set<string>) => void;
@@ -58,6 +99,8 @@ export interface UseNestingControllerResult {
   setIsDialogOpen: (open: boolean) => void;
   isRunning: boolean;
   progress: NestingProgress | null;
+  previewSvg: string | null;
+  previewPackedIds: Set<string>;
   stats: NestingRunStats | null;
   error: string | null;
   isStatusVisible: boolean;
@@ -95,6 +138,9 @@ export const useNestingController = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<NestingProgress | null>(null);
+  const [previewState, setPreviewState] = useState<NestingPreviewState>(
+    createEmptyNestingPreviewState
+  );
   const [stats, setStats] = useState<NestingRunStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStatusDismissed, setIsStatusDismissed] = useState(false);
@@ -130,6 +176,7 @@ export const useNestingController = ({
     setError(null);
     setStats(null);
     setIsStatusDismissed(false);
+    setPreviewState(createEmptyNestingPreviewState());
     setProgress({
       phase: 'preparing',
       progress: 0,
@@ -154,6 +201,12 @@ export const useNestingController = ({
             return;
           }
           setProgress(nextProgress);
+          setPreviewState((currentPreviewState) =>
+            reduceNestingPreviewState(currentPreviewState, {
+              type: 'progress',
+              progress: nextProgress,
+            })
+          );
         },
       });
 
@@ -165,6 +218,7 @@ export const useNestingController = ({
           currentModelRevision: getModelRevision(),
         })
       ) {
+        setPreviewState(createEmptyNestingPreviewState());
         return;
       }
 
@@ -173,6 +227,7 @@ export const useNestingController = ({
       updateFitStatus(result.packedIds, result.notFitIds);
       setSvg(result.svgString);
       setStats(result.stats);
+      setPreviewState(createEmptyNestingPreviewState());
     } catch (nextError) {
       setIsStatusDismissed(false);
       setError(
@@ -180,6 +235,7 @@ export const useNestingController = ({
           ? nextError.message
           : 'Nesting failed unexpectedly.'
       );
+      setPreviewState(createEmptyNestingPreviewState());
     } finally {
       if (activeRunTokenRef.current === runToken) {
         activeRunTokenRef.current = null;
@@ -200,6 +256,7 @@ export const useNestingController = ({
     setStats(null);
     setError(NESTING_RUN_CANCELLED_MESSAGE);
     setIsStatusDismissed(false);
+    setPreviewState(createEmptyNestingPreviewState());
   };
 
   const dismissNestingStatus = () => {
@@ -211,6 +268,7 @@ export const useNestingController = ({
     setProgress(null);
     setStats(null);
     setError(null);
+    setPreviewState(createEmptyNestingPreviewState());
   };
 
   return {
@@ -220,6 +278,8 @@ export const useNestingController = ({
     setIsDialogOpen,
     isRunning,
     progress,
+    previewSvg: previewState.svgString,
+    previewPackedIds: previewState.packedIds,
     stats,
     error,
     isStatusVisible: shouldShowNestingStatus({

@@ -78,6 +78,10 @@ describe('NestingWorkerClient', () => {
         phase: 'preparing',
         progress: 0.5,
         message: 'Preparing',
+        preview: {
+          svgString: '<svg id="preview"/>',
+          packedIds: ['a'],
+        },
       },
     });
     worker.emitMessage({
@@ -108,6 +112,14 @@ describe('NestingWorkerClient', () => {
     const result = await runPromise;
 
     expect(progressSpy).toHaveBeenCalledTimes(1);
+    expect(progressSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preview: {
+          svgString: '<svg id="preview"/>',
+          packedIds: ['a'],
+        },
+      })
+    );
     expect(result.packedIds.has('a')).toBe(true);
     expect(result.packedIds.has('b')).toBe(true);
     expect(result.notFitIds.has('c')).toBe(true);
