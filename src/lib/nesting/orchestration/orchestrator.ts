@@ -15,6 +15,8 @@ import type {
 import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runtime-types';
 import type { PackingRunCallbacks } from '@/lib/nesting';
 
+const DETERMINISTIC_PREVIEW_PLACEMENT_STEP = 3;
+
 const buildDeterministicPreview = (
   prepared: PreparedNestInput,
   snapshot: PlacementProgressSnapshot
@@ -47,6 +49,31 @@ const buildDeterministicPreview = (
   };
 };
 
+const shouldEmitDeterministicPreview = (
+  snapshot: PlacementProgressSnapshot,
+  lastPreviewPlacedParts: number
+) => {
+  if (snapshot.placedParts <= 0) {
+    return false;
+  }
+
+  if (
+    snapshot.totalParts > 0 &&
+    snapshot.processedParts === snapshot.totalParts
+  ) {
+    return true;
+  }
+
+  if (lastPreviewPlacedParts === 0) {
+    return true;
+  }
+
+  return (
+    snapshot.placedParts - lastPreviewPlacedParts >=
+    DETERMINISTIC_PREVIEW_PLACEMENT_STEP
+  );
+};
+
 export const runNestingEngine = (
   prepared: PreparedNestInput,
   options: NormalizedPackingOptions,
@@ -64,6 +91,7 @@ export const runNestingEngine = (
     progress: 0.35,
     message: 'Running deterministic placement',
   });
+  let lastPreviewPlacedParts = 0;
 
   const deterministicPlacementResult = placePartsGreedy(
     prepared.parts,
@@ -75,12 +103,22 @@ export const runNestingEngine = (
           snapshot.totalParts > 0
             ? snapshot.processedParts / snapshot.totalParts
             : 1;
+        const emitPreview = shouldEmitDeterministicPreview(
+          snapshot,
+          lastPreviewPlacedParts
+        );
+
+        if (emitPreview) {
+          lastPreviewPlacedParts = snapshot.placedParts;
+        }
 
         callbacks.onProgress?.({
           phase: 'placing',
           progress: 0.35 + ratio * 0.1,
           message: `Placing parts (${snapshot.processedParts}/${snapshot.totalParts})`,
-          preview: buildDeterministicPreview(prepared, snapshot),
+          preview: emitPreview
+            ? buildDeterministicPreview(prepared, snapshot)
+            : undefined,
         });
       },
     }

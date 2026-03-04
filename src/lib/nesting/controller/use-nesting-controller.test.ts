@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyNestingPreviewState,
   reduceNestingPreviewState,
+  reduceNestingPreviewStateWithGuard,
 } from '@/lib/nesting/controller/use-nesting-controller';
 
 describe('reduceNestingPreviewState', () => {
@@ -73,5 +74,82 @@ describe('reduceNestingPreviewState', () => {
 
     expect(cleared.svgString).toBeNull();
     expect(cleared.packedIds.size).toBe(0);
+  });
+});
+
+describe('reduceNestingPreviewStateWithGuard', () => {
+  it('clears preview when model revision changed during the run', () => {
+    const withPreview = reduceNestingPreviewState(
+      createEmptyNestingPreviewState(),
+      {
+        type: 'progress',
+        progress: {
+          phase: 'placing',
+          progress: 0.35,
+          message: 'Placing',
+          preview: {
+            svgString: '<svg id="preview-old"/>',
+            packedIds: ['a'],
+          },
+        },
+      }
+    );
+    const stale = reduceNestingPreviewStateWithGuard(withPreview, {
+      runToken: 'run-1',
+      activeRunToken: 'run-1',
+      modelRevisionAtRunStart: 3,
+      currentModelRevision: 4,
+      progress: {
+        phase: 'placing',
+        progress: 0.4,
+        message: 'Placing',
+        preview: {
+          svgString: '<svg id="preview-stale"/>',
+          packedIds: ['a', 'b'],
+        },
+      },
+    });
+
+    expect(stale.svgString).toBeNull();
+    expect(stale.packedIds.size).toBe(0);
+  });
+
+  it('does not reapply stale preview after it has been cleared', () => {
+    const staleOnce = reduceNestingPreviewStateWithGuard(
+      createEmptyNestingPreviewState(),
+      {
+        runToken: 'run-1',
+        activeRunToken: 'run-1',
+        modelRevisionAtRunStart: 3,
+        currentModelRevision: 4,
+        progress: {
+          phase: 'placing',
+          progress: 0.4,
+          message: 'Placing',
+          preview: {
+            svgString: '<svg id="preview-stale-1"/>',
+            packedIds: ['a'],
+          },
+        },
+      }
+    );
+    const staleTwice = reduceNestingPreviewStateWithGuard(staleOnce, {
+      runToken: 'run-1',
+      activeRunToken: 'run-1',
+      modelRevisionAtRunStart: 3,
+      currentModelRevision: 4,
+      progress: {
+        phase: 'placing',
+        progress: 0.45,
+        message: 'Placing',
+        preview: {
+          svgString: '<svg id="preview-stale-2"/>',
+          packedIds: ['a', 'b'],
+        },
+      },
+    });
+
+    expect(staleTwice.svgString).toBeNull();
+    expect(staleTwice.packedIds.size).toBe(0);
   });
 });
