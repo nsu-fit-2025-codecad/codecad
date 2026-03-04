@@ -6,6 +6,7 @@ import {
 import { compareFitness, evaluateNestFitness } from '@/lib/nesting/fitness';
 import { runGeneticSearch } from '@/lib/nesting/genetic';
 import { placePartsGreedy } from '@/lib/nesting/place';
+import { resolveRotationSelection } from '@/lib/nesting/rotations';
 import { renderModelToSvg } from '@/lib/svg-render';
 import type { FitnessScore } from '@/lib/nesting/fitness';
 import type { NestConfig, NestResult } from '@/lib/nesting/types';
@@ -15,30 +16,10 @@ const DEFAULT_CURVE_TOLERANCE = 1;
 const MAX_GA_VERTEX_BUDGET = 180;
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
-const resolveRotations = (
-  rotations: number[] | undefined,
-  allowRotation: boolean
-) => {
-  if (Array.isArray(rotations) && rotations.length > 0) {
-    const normalized = Array.from(
-      new Set(
-        rotations
-          .filter((rotation) => Number.isFinite(rotation))
-          .map((rotation) => ((rotation % 360) + 360) % 360)
-      )
-    ).sort((left, right) => left - right);
-
-    if (normalized.length > 0) {
-      return normalized;
-    }
-  }
-
-  return allowRotation ? [0, 90] : [0];
-};
-
 export interface PackingOptions {
   gap?: number;
   allowRotation?: boolean;
+  rotationCount?: number;
   rotations?: number[];
   curveTolerance?: number;
   searchStep?: number;
@@ -122,6 +103,11 @@ export function packModelsIntoNestingArea(
     EPSILON,
     options.curveTolerance ?? DEFAULT_CURVE_TOLERANCE
   );
+  const resolvedRotationSelection = resolveRotationSelection({
+    rotationCount: options.rotationCount,
+    rotations: options.rotations,
+    allowRotation,
+  });
 
   const packedModels: IModelMap = {};
   const didNotFitModels: IModelMap = {};
@@ -182,7 +168,7 @@ export function packModelsIntoNestingArea(
 
   const config: NestConfig = {
     gap,
-    rotations: resolveRotations(options.rotations, allowRotation),
+    rotations: resolvedRotationSelection.rotations,
     curveTolerance,
     searchStep: options.searchStep,
   };
