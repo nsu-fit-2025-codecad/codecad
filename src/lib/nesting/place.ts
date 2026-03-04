@@ -190,6 +190,47 @@ const extractHoleRegions = (shape: PolygonShape): HoleRegion[] =>
     })
     .filter((holeRegion): holeRegion is HoleRegion => holeRegion !== null);
 
+// Interior candidate anchors for a hole region: center + quarter points of the
+// bounding-box valid offset range. These are added to candidatePoints regardless
+// of what buildInnerFitPolygon returns so that, when boundary candidates are
+// blocked by already-placed parts, there is still an interior position to try.
+const holeInteriorAnchors = (
+  holeShape: PolygonShape,
+  movingShape: PolygonShape,
+  gap: number,
+  offsetX: number,
+  offsetY: number
+): Point[] => {
+  const minX = holeShape.bounds.minX - movingShape.bounds.minX + gap;
+  const maxX = holeShape.bounds.maxX - movingShape.bounds.maxX - gap;
+  const minY = holeShape.bounds.minY - movingShape.bounds.minY + gap;
+  const maxY = holeShape.bounds.maxY - movingShape.bounds.maxY - gap;
+
+  if (maxX < minX - NESTING_EPSILON || maxY < minY - NESTING_EPSILON) {
+    return [];
+  }
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const anchors: Point[] = [{ x: cx + offsetX, y: cy + offsetY }];
+
+  if (maxX - minX > NESTING_EPSILON) {
+    anchors.push(
+      { x: (minX * 3 + maxX) / 4 + offsetX, y: cy + offsetY },
+      { x: (minX + maxX * 3) / 4 + offsetX, y: cy + offsetY }
+    );
+  }
+
+  if (maxY - minY > NESTING_EPSILON) {
+    anchors.push(
+      { x: cx + offsetX, y: (minY * 3 + maxY) / 4 + offsetY },
+      { x: cx + offsetX, y: (minY + maxY * 3) / 4 + offsetY }
+    );
+  }
+
+  return anchors;
+};
+
 const fallbackAnchorPoints = (
   shape: PolygonShape,
   bin: PolygonShape
@@ -418,6 +459,16 @@ export function placePartsGreedy(
             ...pairwiseVertexCandidates(
               holeRegion.shape,
               normalizedShape,
+              placedPart.x,
+              placedPart.y
+            )
+          );
+
+          candidatePoints.push(
+            ...holeInteriorAnchors(
+              holeRegion.shape,
+              normalizedShape,
+              config.gap,
               placedPart.x,
               placedPart.y
             )

@@ -611,4 +611,78 @@ describe('placePartsGreedy', () => {
     expect(result.notPlacedIds).toHaveLength(0);
     expect(result.placements).toHaveLength(2);
   });
+
+  it('places insert in diamond-shaped hole using interior anchor when boundary candidates are taken', () => {
+    // Diamond holes produce very few vertex-alignment candidates from buildInnerFitPolygon
+    // because most corner positions fall outside the diamond shape.
+    // A blocker occupies the first valid boundary candidate (e.g. (80,80)).
+    // holeInteriorAnchors adds a center candidate (95,95) and quarter-point anchors,
+    // giving the insert a valid position without relying on pairwise or boundary candidates.
+    const bin = rectangleShape(200, 200);
+    const diamondFrame = customPart(
+      'diamond-frame',
+      normalizeShape(
+        createShape([
+          [
+            { x: 0, y: 0 },
+            { x: 200, y: 0 },
+            { x: 200, y: 200 },
+            { x: 0, y: 200 },
+          ],
+          // diamond hole: center (100,100), L1-radius 40
+          [
+            { x: 60, y: 100 },
+            { x: 100, y: 60 },
+            { x: 140, y: 100 },
+            { x: 100, y: 140 },
+          ],
+        ])
+      )
+    );
+    // blocker and insert are the same size; both must fit inside the diamond hole
+    const blocker = customPart('blocker', rectangleShape(10, 10));
+    const insert = customPart('insert', rectangleShape(10, 10));
+
+    const result = placePartsGreedy([diamondFrame, blocker, insert], bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+
+    expect(result.notPlacedIds).toHaveLength(0);
+    expect(result.placements).toHaveLength(3);
+
+    // both blocker and insert must be inside the diamond hole
+    for (const id of ['blocker', 'insert']) {
+      const p = result.placements.find((pl) => pl.id === id);
+      expect(p).toBeDefined();
+      // check all four corners of the 10x10 placed part are inside the diamond
+      const corners = [
+        { x: p!.x, y: p!.y },
+        { x: p!.x + 10, y: p!.y },
+        { x: p!.x + 10, y: p!.y + 10 },
+        { x: p!.x, y: p!.y + 10 },
+      ];
+      for (const c of corners) {
+        expect(Math.abs(c.x - 100) + Math.abs(c.y - 100)).toBeLessThanOrEqual(
+          40 + NESTING_EPSILON
+        );
+      }
+    }
+
+    // the two placed parts must not overlap
+    const bPlacement = result.placements.find((pl) => pl.id === 'blocker')!;
+    const iPlacement = result.placements.find((pl) => pl.id === 'insert')!;
+    const blockerShape = translateShape(
+      rectangleShape(10, 10),
+      bPlacement.x,
+      bPlacement.y
+    );
+    const insertShape = translateShape(
+      rectangleShape(10, 10),
+      iPlacement.x,
+      iPlacement.y
+    );
+    expect(polygonsOverlap(blockerShape, insertShape, 0)).toBe(false);
+  });
 });
