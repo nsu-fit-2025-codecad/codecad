@@ -394,6 +394,69 @@ describe('packModelsIntoNestingArea', () => {
     expect(previewEvents.length).toBeGreaterThan(0);
     expect(previewEvents.length).toBeLessThan(placingPartEvents.length);
   });
+
+  it('emits GA best-so-far previews without rebuilding per evaluated candidate', () => {
+    const target = new makerjs.models.Rectangle(140, 100);
+    const models = {
+      concave: {
+        paths: {
+          a: new makerjs.paths.Line([0, 0], [80, 0]),
+          b: new makerjs.paths.Line([80, 0], [80, 40]),
+          c: new makerjs.paths.Line([80, 40], [40, 40]),
+          d: new makerjs.paths.Line([40, 40], [40, 80]),
+          e: new makerjs.paths.Line([40, 80], [0, 80]),
+          f: new makerjs.paths.Line([0, 80], [0, 0]),
+        },
+      },
+      plug: new makerjs.models.Rectangle(40, 40),
+      barA: new makerjs.models.Rectangle(20, 30),
+      barB: new makerjs.models.Rectangle(30, 20),
+    };
+    const progressEvents: Array<{
+      phase: string;
+      previewSvgString?: string;
+      previewPackedIds?: string[];
+    }> = [];
+
+    const result = packModelsIntoNestingArea(
+      target,
+      models,
+      {
+        allowRotation: true,
+        useGeneticSearch: true,
+        populationSize: 8,
+        maxGenerations: 3,
+        mutationRate: 0.25,
+        crossoverRate: 0.85,
+        eliteCount: 2,
+        geneticSeed: 1234,
+      },
+      {
+        onProgress: (progress) => {
+          progressEvents.push({
+            phase: progress.phase,
+            previewSvgString: progress.preview?.svgString,
+            previewPackedIds: progress.preview?.packedIds,
+          });
+        },
+      }
+    );
+
+    const geneticEvents = progressEvents.filter(
+      (progressEvent) => progressEvent.phase === 'genetic'
+    );
+    const previewEvents = geneticEvents.filter(
+      (progressEvent) =>
+        typeof progressEvent.previewSvgString === 'string' &&
+        Array.isArray(progressEvent.previewPackedIds)
+    );
+
+    expect(geneticEvents.length).toBeGreaterThan(0);
+    expect(previewEvents.length).toBeGreaterThan(0);
+    expect(previewEvents[0].previewSvgString).toContain('<svg');
+    expect(result.stats.evaluations).toBeGreaterThan(0);
+    expect(previewEvents.length).toBeLessThan(result.stats.evaluations ?? 0);
+  });
 });
 
 describe('packModelsIntoTargetModel', () => {

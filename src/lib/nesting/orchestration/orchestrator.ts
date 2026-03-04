@@ -7,6 +7,7 @@ import { decideGeneticExecution } from '@/lib/nesting/orchestration/genetic-poli
 import { applyPlacementToModelMap } from '@/lib/nesting/orchestration/model-assembly';
 import { placePartsGreedy } from '@/lib/nesting/placement/place';
 import type { PlacementProgressSnapshot } from '@/lib/nesting/placement/place';
+import type { NestResult } from '@/lib/nesting/polygon/types';
 import { renderModelToSvg } from '@/lib/svg-render';
 import type {
   EngineExecutionResult,
@@ -16,24 +17,15 @@ import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runti
 import type { PackingRunCallbacks } from '@/lib/nesting';
 
 const DETERMINISTIC_PREVIEW_PLACEMENT_STEP = 3;
+const GENETIC_PREVIEW_MIN_INTERVAL_MS = 200;
 
-const buildDeterministicPreview = (
+const buildPreviewFromResult = (
   prepared: PreparedNestInput,
-  snapshot: PlacementProgressSnapshot
+  placementResult: NestResult
 ) => {
-  const placedIds = new Set(
-    snapshot.placements.map((placement) => placement.id)
-  );
-  const notPlacedSet = new Set(snapshot.notPlacedIds);
-  const unresolvedIds = prepared.parts
-    .map((part) => part.id)
-    .filter((id) => !placedIds.has(id) && !notPlacedSet.has(id));
   const assembled = applyPlacementToModelMap({
     prepared,
-    placementResult: {
-      placements: snapshot.placements,
-      notPlacedIds: [...snapshot.notPlacedIds, ...unresolvedIds],
-    },
+    placementResult,
   });
   const previewModel = {
     models: {
@@ -47,6 +39,24 @@ const buildDeterministicPreview = (
     svgString: renderModelToSvg(previewModel),
     packedIds: Object.keys(assembled.packedModels),
   };
+};
+
+const buildDeterministicPreview = (
+  prepared: PreparedNestInput,
+  snapshot: PlacementProgressSnapshot
+) => {
+  const placedIds = new Set(
+    snapshot.placements.map((placement) => placement.id)
+  );
+  const notPlacedSet = new Set(snapshot.notPlacedIds);
+  const unresolvedIds = prepared.parts
+    .map((part) => part.id)
+    .filter((id) => !placedIds.has(id) && !notPlacedSet.has(id));
+
+  return buildPreviewFromResult(prepared, {
+    placements: snapshot.placements,
+    notPlacedIds: [...snapshot.notPlacedIds, ...unresolvedIds],
+  });
 };
 
 const shouldEmitDeterministicPreview = (
@@ -150,21 +160,48 @@ export const runNestingEngine = (
       seed: options.geneticSeed,
     },
     {
-      onProgress: (progress) => {
-        const ratio =
-          progress.totalGenerations > 0
-            ? progress.generation / progress.totalGenerations
-            : 1;
+      // Preview payloads are throttled to avoid rebuilding SVG every generation.
+      onProgress: (() => {
+        let lastGeneticPreviewAt = 0;
+        let latestGeneticPreview:
+          | ReturnType<typeof buildPreviewFromResult>
+          | undefined;
 
-        callbacks.onProgress?.({
-          phase: 'genetic',
-          progress: 0.45 + ratio * 0.5,
-          message: 'Running genetic search',
-          generation: progress.generation,
-          totalGenerations: progress.totalGenerations,
-          bestFitness: progress.bestFitness,
-        });
-      },
+        return (progress) => {
+          const ratio =
+            progress.totalGenerations > 0
+              ? progress.generation / progress.totalGenerations
+              : 1;
+          const now = Date.now();
+
+          if (progress.bestResult) {
+            latestGeneticPreview = buildPreviewFromResult(
+              prepared,
+              progress.bestResult
+            );
+          }
+
+          const shouldEmitPreview =
+            typeof latestGeneticPreview !== 'undefined' &&
+            (Boolean(progress.bestImproved) ||
+              lastGeneticPreviewAt === 0 ||
+              now - lastGeneticPreviewAt >= GENETIC_PREVIEW_MIN_INTERVAL_MS);
+
+          if (shouldEmitPreview) {
+            lastGeneticPreviewAt = now;
+          }
+
+          callbacks.onProgress?.({
+            phase: 'genetic',
+            progress: 0.45 + ratio * 0.5,
+            message: 'Running genetic search',
+            generation: progress.generation,
+            totalGenerations: progress.totalGenerations,
+            bestFitness: progress.bestFitness,
+            preview: shouldEmitPreview ? latestGeneticPreview : undefined,
+          });
+        };
+      })(),
     }
   );
 

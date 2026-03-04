@@ -33,6 +33,8 @@ export interface GeneticProgressSnapshot {
   totalGenerations: number;
   evaluations: number;
   bestFitness: FitnessScore;
+  bestImproved?: boolean;
+  bestResult?: NestResult;
 }
 
 export interface GeneticSearchCallbacks {

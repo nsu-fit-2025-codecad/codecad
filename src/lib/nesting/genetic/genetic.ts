@@ -109,6 +109,8 @@ export const runGeneticSearch = (
     totalGenerations: resolvedConfig.maxGenerations,
     evaluations,
     bestFitness: best.fitness,
+    bestImproved: true,
+    bestResult: best.result,
   });
 
   for (
@@ -145,11 +147,14 @@ export const runGeneticSearch = (
 
     const generationBest = findBestEvaluatedChromosome(currentEvaluated);
 
+    let bestImproved = false;
+
     if (
       generationBest &&
       compareEvaluatedChromosomes(generationBest, best) < 0
     ) {
       best = generationBest;
+      bestImproved = true;
     }
 
     callbacks.onProgress?.({
@@ -157,6 +162,8 @@ export const runGeneticSearch = (
       totalGenerations: resolvedConfig.maxGenerations,
       evaluations,
       bestFitness: best.fitness,
+      bestImproved,
+      bestResult: bestImproved ? best.result : undefined,
     });
   }
 
