@@ -7,10 +7,17 @@ import {
   createShape,
   translateShape,
 } from '@/lib/nesting/polygon/polygon-math';
+import {
+  POINT_EPSILON,
+  contourPoints,
+  dedupePoints,
+  pointKey,
+  roundPointValue,
+  sortByYThenX,
+} from '@/lib/nesting/polygon/point-utils';
 import type { Point, PolygonShape } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 
-const POINT_EPSILON = 1e-6;
 const MAX_AXIS_VALUES = 40;
 const MAX_GRID_POINTS = 2_500;
 const MAX_DIRECT_PAIR_POINTS = 6_000;
@@ -25,44 +32,6 @@ export interface NfpRegion {
   polygon: PolygonShape | null;
   points: Point[];
 }
-
-const sortByYThenX = (a: Point, b: Point) => {
-  if (Math.abs(a.y - b.y) > POINT_EPSILON) {
-    return a.y - b.y;
-  }
-
-  return a.x - b.x;
-};
-
-const roundToTolerance = (value: number) =>
-  Math.round(value / POINT_EPSILON) * POINT_EPSILON;
-
-const pointKey = (point: Point) =>
-  `${roundToTolerance(point.x)}:${roundToTolerance(point.y)}`;
-
-const dedupePoints = (points: Point[]): Point[] => {
-  const seen = new Set<string>();
-  const unique: Point[] = [];
-
-  points.forEach((point) => {
-    const key = pointKey(point);
-
-    if (seen.has(key)) {
-      return;
-    }
-
-    seen.add(key);
-    unique.push({
-      x: roundToTolerance(point.x),
-      y: roundToTolerance(point.y),
-    });
-  });
-
-  return unique;
-};
-
-const shapePoints = (shape: PolygonShape): Point[] =>
-  shape.contours.flatMap((contour) => contour.map((point) => ({ ...point })));
 
 const samplePoints = (points: Point[], maxPoints: number): Point[] => {
   if (points.length <= maxPoints) {
@@ -101,7 +70,7 @@ const samplePoints = (points: Point[], maxPoints: number): Point[] => {
 };
 
 const sampledShapePoints = (shape: PolygonShape) =>
-  samplePoints(shapePoints(shape), MAX_NFP_SHAPE_POINTS);
+  samplePoints(contourPoints(shape), MAX_NFP_SHAPE_POINTS);
 
 const shapeVertexCount = (shape: PolygonShape) =>
   shape.contours.reduce((count, contour) => count + contour.length, 0);
@@ -147,7 +116,7 @@ const limitPairwisePointSets = (
 
 const reducedAxisValues = (values: number[]): number[] => {
   const uniqueSorted = Array.from(
-    new Set(values.map((value) => roundToTolerance(value)))
+    new Set(values.map((value) => roundPointValue(value)))
   ).sort((a, b) => a - b);
 
   if (uniqueSorted.length <= MAX_AXIS_VALUES) {

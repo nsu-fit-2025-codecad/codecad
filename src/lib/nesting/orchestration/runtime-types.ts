@@ -1,6 +1,5 @@
 import makerjs, { IModel, IModelMap } from 'makerjs';
 import type {
-  NestConfig,
   NestPart,
   NestResult,
   PolygonShape,
@@ -9,7 +8,6 @@ import type {
   NestingAlgorithm,
   NestingRunStats,
   PackingOptions,
-  PackingRunCallbacks,
 } from '@/lib/nesting';
 
 export interface NormalizedPackingOptions extends Omit<
@@ -67,13 +65,7 @@ export interface EngineExecutionResult {
   statsExtras: Partial<NestingRunStats>;
 }
 
-export interface OrchestrationContext {
-  options: NormalizedPackingOptions;
-  callbacks?: PackingRunCallbacks;
-}
-
 export interface NestAssemblyContext {
   prepared: PreparedNestInput;
   placementResult: NestResult;
 }
-export type NfpPlacementConfig = NestConfig;

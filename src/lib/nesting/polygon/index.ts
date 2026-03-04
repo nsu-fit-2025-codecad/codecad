@@ -1,4 +1,5 @@
 export * from './types';
+export * from './point-utils';
 export * from './polygon-math';
 export * from './polygon-cleanup';
 export * from './polygon-offset';

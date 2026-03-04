@@ -1,4 +1,5 @@
 import makerjs, { IModel } from 'makerjs';
+import { hashString } from '@/lib/nesting/utils/random';
 
 export const MODEL_FILL_ATTRIBUTE = 'data-model-fill';
 export const MODEL_FILL_FOR_ATTRIBUTE = 'data-model-fill-for';
@@ -351,17 +352,6 @@ const toIncludedLayerId = (modelId: string): string =>
 
 const toExcludedLayerId = (modelId: string): string =>
   `${EXCLUDED_LAYER_PREFIX}${modelId}`;
-
-const hashString = (value: string): number => {
-  let hash = 2166136261;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return hash >>> 0;
-};
 
 const escapeAttributeValue = (value: string): string => {
   return value
