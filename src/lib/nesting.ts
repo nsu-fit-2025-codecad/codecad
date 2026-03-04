@@ -1,6 +1,7 @@
-import { IModel, IModelMap } from 'makerjs';
+import makerjs, { IModel, IModelMap } from 'makerjs';
 import { prepareNestInput } from '@/lib/nesting/orchestration/input-preparation';
 import { applyPlacementToModelMap } from '@/lib/nesting/orchestration/model-assembly';
+import { layoutModelsInOverflowArea } from '@/lib/nesting/orchestration/overflow-layout';
 import { normalizePackingOptions } from '@/lib/nesting/orchestration/options';
 import { runNestingEngine } from '@/lib/nesting/orchestration/orchestrator';
 import { createProgressEmitter } from '@/lib/nesting/orchestration/progress';
@@ -94,6 +95,11 @@ export function packModelsIntoNestingArea(
   });
 
   if (!prepared) {
+    const overflowDidNotFitModels = layoutModelsInOverflowArea(
+      initialDidNotFitModels,
+      makerjs.measure.modelExtents(nestingArea)
+    );
+
     emitProgress({
       phase: 'finalizing',
       progress: 1,
@@ -102,11 +108,11 @@ export function packModelsIntoNestingArea(
 
     return {
       packedModels: {},
-      didNotFitModels: initialDidNotFitModels,
+      didNotFitModels: overflowDidNotFitModels,
       stats: buildNestingStats({
         algorithm: 'deterministic',
         placements: [],
-        didNotFitModels: initialDidNotFitModels,
+        didNotFitModels: overflowDidNotFitModels,
         packedModels: {},
         startedAt,
       }),
@@ -197,10 +203,11 @@ export function packModelsIntoTargetModel(
     ...packedModels,
     ...didNotFitModels,
   };
+  const notFitModelIds = Object.keys(didNotFitModels);
 
   return {
     packedIds: new Set(Object.keys(packedModels)),
-    notFitIds: new Set(Object.keys(didNotFitModels)),
+    notFitIds: new Set(notFitModelIds),
     svgString: renderModelToSvg(model),
     stats,
   };

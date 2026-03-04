@@ -47,6 +47,49 @@ const combinedPackedArea = (models: IModelMap) => {
   return (maxX - minX) * (maxY - minY);
 };
 
+const getExtentsOrThrow = (model: IModel) => {
+  const extents = makerjs.measure.modelExtents(model);
+
+  if (!extents) {
+    throw new Error('Model has no extents');
+  }
+
+  return extents;
+};
+
+const extentsOverlap = (left: makerjs.IMeasure, right: makerjs.IMeasure) => {
+  const xOverlap = left.low[0] < right.high[0] && right.low[0] < left.high[0];
+  const yOverlap = left.low[1] < right.high[1] && right.low[1] < left.high[1];
+
+  return xOverlap && yOverlap;
+};
+
+const extractViewBox = (svgString: string): string => {
+  const viewBoxMatch = svgString.match(/\bviewBox="([^"]+)"/i);
+
+  if (!viewBoxMatch) {
+    throw new Error('SVG does not contain a viewBox');
+  }
+
+  return viewBoxMatch[1];
+};
+
+const extractViewBoxSize = (svgString: string) => {
+  const values = extractViewBox(svgString)
+    .trim()
+    .split(/\s+/)
+    .map((value) => Number.parseFloat(value));
+
+  if (values.length !== 4 || values.some((value) => Number.isNaN(value))) {
+    throw new Error('SVG viewBox is malformed');
+  }
+
+  return {
+    width: values[2],
+    height: values[3],
+  };
+};
+
 describe('packModelsIntoNestingArea', () => {
   it('packs with 90 degree rotation when enabled', () => {
     const target = new makerjs.models.Rectangle(100, 80);
@@ -115,6 +158,33 @@ describe('packModelsIntoNestingArea', () => {
     const withGap = packModelsIntoNestingArea(target, models, { gap: 1 });
     expect(Object.keys(withGap.packedModels)).toHaveLength(1);
     expect(Object.keys(withGap.didNotFitModels)).toHaveLength(1);
+  });
+
+  it('repositions not-fit models into overflow when preparation fails', () => {
+    const target: IModel = {
+      paths: {
+        top: new makerjs.paths.Line([0, 0], [100, 0]),
+      },
+    };
+    const models = {
+      a: new makerjs.models.Rectangle(30, 30),
+      b: new makerjs.models.Rectangle(20, 20),
+    };
+
+    const result = packModelsIntoNestingArea(target, models, {
+      useGeneticSearch: false,
+    });
+
+    expect(Object.keys(result.packedModels)).toHaveLength(0);
+    expect(Object.keys(result.didNotFitModels).sort()).toEqual(['a', 'b']);
+
+    const targetExtents = getExtentsOrThrow(target);
+    const overflowA = getExtentsOrThrow(result.didNotFitModels.a);
+    const overflowB = getExtentsOrThrow(result.didNotFitModels.b);
+
+    expect(overflowA.low[0]).toBeGreaterThan(targetExtents.high[0]);
+    expect(overflowB.low[0]).toBeGreaterThan(targetExtents.high[0]);
+    expect(extentsOverlap(overflowA, overflowB)).toBe(false);
   });
 
   it('does not mutate source models when packing', () => {
@@ -506,19 +576,23 @@ describe('packModelsIntoNestingArea', () => {
 });
 
 describe('packModelsIntoTargetModel', () => {
-  it('keeps models that did not fit in model.models and returns svg', () => {
+  it('keeps overflow models visible with a compact deterministic layout', () => {
     const sourceA = new makerjs.models.Rectangle(80, 80);
     const sourceB = new makerjs.models.Rectangle(80, 80);
+    const sourceC = new makerjs.models.Rectangle(80, 80);
 
     const root: IModel = {
       models: {
         target: new makerjs.models.Rectangle(100, 100),
         a: sourceA,
         b: sourceB,
+        c: sourceC,
       },
     };
 
-    const beforeA = makerjs.measure.modelExtents(sourceA)!;
+    const beforeA = getExtentsOrThrow(sourceA);
+    const beforeB = getExtentsOrThrow(sourceB);
+    const beforeC = getExtentsOrThrow(sourceC);
 
     const result = packModelsIntoTargetModel(root, 'target', {
       allowRotation: false,
@@ -526,17 +600,56 @@ describe('packModelsIntoTargetModel', () => {
 
     expect(result).not.toBeNull();
     expect(result?.packedIds.size).toBe(1);
-    expect(result?.notFitIds.size).toBe(1);
+    expect(result?.packedIds.has('a')).toBe(true);
+    expect(result?.notFitIds.size).toBe(2);
+    expect(result?.notFitIds.has('b')).toBe(true);
+    expect(result?.notFitIds.has('c')).toBe(true);
     expect(result?.svgString).toContain('<svg');
     expect(result?.svgString).toContain('data-model-fill-for="target"');
     expect(result?.svgString).toContain('data-model-fill-for="a"');
     expect(result?.svgString).toContain('data-model-fill-for="b"');
+    expect(result?.svgString).toContain('data-model-fill-for="c"');
 
     expect(root.models).toBeDefined();
-    expect(Object.keys(root.models ?? {}).sort()).toEqual(['a', 'b', 'target']);
+    expect(Object.keys(root.models ?? {}).sort()).toEqual([
+      'a',
+      'b',
+      'c',
+      'target',
+    ]);
 
-    const afterA = makerjs.measure.modelExtents(sourceA)!;
+    const targetExtents = getExtentsOrThrow(root.models!.target);
+    const packedExtents = getExtentsOrThrow(root.models!.a);
+    const overflowBExtents = getExtentsOrThrow(root.models!.b);
+    const overflowCExtents = getExtentsOrThrow(root.models!.c);
+    const viewBoxSize = extractViewBoxSize(result!.svgString);
+
+    expect(packedExtents.low[0]).toBeGreaterThanOrEqual(targetExtents.low[0]);
+    expect(packedExtents.low[1]).toBeGreaterThanOrEqual(targetExtents.low[1]);
+    expect(packedExtents.high[0]).toBeLessThanOrEqual(targetExtents.high[0]);
+    expect(packedExtents.high[1]).toBeLessThanOrEqual(targetExtents.high[1]);
+
+    expect(overflowBExtents.low[0]).toBeGreaterThan(targetExtents.high[0]);
+    expect(overflowCExtents.low[0]).toBeGreaterThan(targetExtents.high[0]);
+    expect(extentsOverlap(overflowBExtents, overflowCExtents)).toBe(false);
+    expect(overflowBExtents.low[1]).toBeCloseTo(overflowCExtents.low[1], 6);
+    expect(viewBoxSize.width).toBeLessThanOrEqual(targetExtents.width * 3.2);
+    expect(viewBoxSize.height).toBeLessThanOrEqual(targetExtents.height * 1.6);
+
+    const afterA = getExtentsOrThrow(sourceA);
+    const afterB = getExtentsOrThrow(sourceB);
+    const afterC = getExtentsOrThrow(sourceC);
     expect(afterA.low[0]).toBeCloseTo(beforeA.low[0], 6);
     expect(afterA.low[1]).toBeCloseTo(beforeA.low[1], 6);
+    expect(afterA.high[0]).toBeCloseTo(beforeA.high[0], 6);
+    expect(afterA.high[1]).toBeCloseTo(beforeA.high[1], 6);
+    expect(afterB.low[0]).toBeCloseTo(beforeB.low[0], 6);
+    expect(afterB.low[1]).toBeCloseTo(beforeB.low[1], 6);
+    expect(afterB.high[0]).toBeCloseTo(beforeB.high[0], 6);
+    expect(afterB.high[1]).toBeCloseTo(beforeB.high[1], 6);
+    expect(afterC.low[0]).toBeCloseTo(beforeC.low[0], 6);
+    expect(afterC.low[1]).toBeCloseTo(beforeC.low[1], 6);
+    expect(afterC.high[0]).toBeCloseTo(beforeC.high[0], 6);
+    expect(afterC.high[1]).toBeCloseTo(beforeC.high[1], 6);
   });
 });

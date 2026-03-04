@@ -26,20 +26,28 @@ interface ModelFillLayer {
 
 export interface RenderModelToSvgOptions {
   filledModelIds?: Iterable<string>;
+  excludedModelIds?: Iterable<string>;
 }
 
 export const renderModelToSvg = (
   model: IModel,
   options: RenderModelToSvgOptions = {}
 ): string => {
-  const outlineSvg = makerjs.exporter.toSVG(model, OUTLINE_SVG_OPTIONS);
-  const filledModelIds = resolveFilledModelIds(model, options.filledModelIds);
+  const renderableModel = buildRenderableModel(model, options.excludedModelIds);
+  const outlineSvg = makerjs.exporter.toSVG(
+    renderableModel,
+    OUTLINE_SVG_OPTIONS
+  );
+  const filledModelIds = resolveFilledModelIds(
+    renderableModel,
+    options.filledModelIds
+  );
 
   if (filledModelIds.size === 0) {
     return outlineSvg;
   }
 
-  const fillLayers = buildModelFillLayers(model, filledModelIds);
+  const fillLayers = buildModelFillLayers(renderableModel, filledModelIds);
 
   if (fillLayers.length === 0) {
     return outlineSvg;
@@ -173,6 +181,37 @@ const normalizeModelIdSet = (
       (modelId): modelId is string => typeof modelId === 'string'
     )
   );
+};
+
+const buildRenderableModel = (
+  model: IModel,
+  excludedModelIds: Iterable<string> | undefined
+): IModel => {
+  const excludedModelIdSet = normalizeModelIdSet(excludedModelIds);
+
+  if (
+    excludedModelIdSet.size === 0 ||
+    !model.models ||
+    Object.keys(model.models).length === 0
+  ) {
+    return model;
+  }
+
+  const filteredEntries = Object.entries(model.models).filter(
+    ([modelId]) => !excludedModelIdSet.has(modelId)
+  );
+
+  if (filteredEntries.length === Object.keys(model.models).length) {
+    return model;
+  }
+
+  const clonedModel = makerjs.model.clone(model);
+  clonedModel.models = Object.fromEntries(
+    Object.entries(clonedModel.models ?? {}).filter(
+      ([modelId]) => !excludedModelIdSet.has(modelId)
+    )
+  );
+  return clonedModel;
 };
 
 const resolveFilledModelIds = (

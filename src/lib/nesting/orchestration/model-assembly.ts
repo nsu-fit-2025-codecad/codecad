@@ -1,4 +1,5 @@
 import makerjs, { IModelMap } from 'makerjs';
+import { layoutModelsInOverflowArea } from '@/lib/nesting/orchestration/overflow-layout';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 import type {
   AssembledNestResult,
@@ -10,7 +11,7 @@ export const applyPlacementToModelMap = ({
   placementResult,
 }: NestAssemblyContext): AssembledNestResult => {
   const packedModels: IModelMap = {};
-  const didNotFitModels: IModelMap = { ...prepared.invalidModels };
+  const overflowCandidates: IModelMap = { ...prepared.invalidModels };
   const partById = new Map(prepared.parts.map((part) => [part.id, part]));
 
   placementResult.placements.forEach((placement) => {
@@ -29,7 +30,7 @@ export const applyPlacementToModelMap = ({
     const packedExtents = makerjs.measure.modelExtents(packedModel);
 
     if (!packedExtents) {
-      didNotFitModels[placement.id] = part.sourceModel;
+      overflowCandidates[placement.id] = part.sourceModel;
       return;
     }
 
@@ -51,11 +52,14 @@ export const applyPlacementToModelMap = ({
       return;
     }
 
-    didNotFitModels[id] = part.sourceModel;
+    overflowCandidates[id] = part.sourceModel;
   });
 
   return {
     packedModels,
-    didNotFitModels,
+    didNotFitModels: layoutModelsInOverflowArea(
+      overflowCandidates,
+      prepared.nestingExtents
+    ),
   };
 };
