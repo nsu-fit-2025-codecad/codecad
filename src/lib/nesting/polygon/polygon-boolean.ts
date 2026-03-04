@@ -131,6 +131,8 @@ const isPointOnShapeBoundary = (point: Point, shape: PolygonShape) =>
 const isPointStrictlyInsidePolygon = (point: Point, shape: PolygonShape) =>
   pointInPolygon(point, shape) && !isPointOnShapeBoundary(point, shape);
 
+const MATERIAL_PROBE_OFFSET = 1e-4;
+
 const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
   const sourceMaterialInsideTarget = (point: Point) =>
     pointInPolygon(point, source) &&
@@ -160,6 +162,8 @@ const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
       }
     }
 
+    const contourArea = polygonArea(contour);
+
     for (const [start, end] of contourSegments(contour)) {
       const midpoint = {
         x: (start.x + end.x) / 2,
@@ -168,6 +172,30 @@ const hasStrictContainment = (source: PolygonShape, target: PolygonShape) => {
 
       if (sourceMaterialInsideTarget(midpoint)) {
         return true;
+      }
+
+      if (
+        isPointOnShapeBoundary(midpoint, target) &&
+        Math.abs(contourArea) > NESTING_EPSILON
+      ) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const edgeLen = Math.hypot(dx, dy);
+
+        if (edgeLen > NESTING_EPSILON) {
+          const sign = contourArea > 0 ? 1 : -1;
+          const nx = (sign * -dy) / edgeLen;
+          const ny = (sign * dx) / edgeLen;
+
+          const probe = {
+            x: midpoint.x + nx * MATERIAL_PROBE_OFFSET,
+            y: midpoint.y + ny * MATERIAL_PROBE_OFFSET,
+          };
+
+          if (pointInPolygon(probe, source) && pointInPolygon(probe, target)) {
+            return true;
+          }
+        }
       }
     }
   }
