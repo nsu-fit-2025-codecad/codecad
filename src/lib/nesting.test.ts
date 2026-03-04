@@ -349,6 +349,51 @@ describe('packModelsIntoNestingArea', () => {
     expect(afterB.high[0]).toBeCloseTo(beforeB.high[0], 6);
     expect(afterB.high[1]).toBeCloseTo(beforeB.high[1], 6);
   });
+
+  it('throttles deterministic preview rendering so it is not emitted per part', () => {
+    const target = new makerjs.models.Rectangle(160, 160);
+    const models: IModelMap = {};
+
+    for (let index = 0; index < 12; index += 1) {
+      models[`part-${index}`] = new makerjs.models.Rectangle(20, 20);
+    }
+
+    const progressEvents: Array<{
+      phase: string;
+      message: string;
+      previewSvgString?: string;
+    }> = [];
+
+    const result = packModelsIntoNestingArea(
+      target,
+      models,
+      {
+        useGeneticSearch: false,
+      },
+      {
+        onProgress: (progress) => {
+          progressEvents.push({
+            phase: progress.phase,
+            message: progress.message,
+            previewSvgString: progress.preview?.svgString,
+          });
+        },
+      }
+    );
+
+    const placingPartEvents = progressEvents.filter(
+      (progressEvent) =>
+        progressEvent.phase === 'placing' &&
+        progressEvent.message.startsWith('Placing parts (')
+    );
+    const previewEvents = placingPartEvents.filter(
+      (progressEvent) => typeof progressEvent.previewSvgString === 'string'
+    );
+
+    expect(Object.keys(result.packedModels)).toHaveLength(12);
+    expect(previewEvents.length).toBeGreaterThan(0);
+    expect(previewEvents.length).toBeLessThan(placingPartEvents.length);
+  });
 });
 
 describe('packModelsIntoTargetModel', () => {

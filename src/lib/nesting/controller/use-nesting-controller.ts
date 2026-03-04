@@ -83,6 +83,28 @@ export const reduceNestingPreviewState = (
   };
 };
 
+export interface GuardedNestingPreviewProgress extends NestingWorkerResultGuard {
+  progress: NestingProgress;
+}
+
+export const reduceNestingPreviewStateWithGuard = (
+  state: NestingPreviewState,
+  event: GuardedNestingPreviewProgress
+): NestingPreviewState => {
+  if (!shouldApplyNestingWorkerResult(event)) {
+    if (state.svgString === null && state.packedIds.size === 0) {
+      return state;
+    }
+
+    return createEmptyNestingPreviewState();
+  }
+
+  return reduceNestingPreviewState(state, {
+    type: 'progress',
+    progress: event.progress,
+  });
+};
+
 export interface UseNestingControllerInput {
   model: IModel | null;
   updateFitStatus: (packedIds: Set<string>, notFitIds: Set<string>) => void;
@@ -197,16 +219,27 @@ export const useNestingController = ({
         targetModelId,
         options: normalizedOptions,
         onProgress: (nextProgress) => {
-          if (activeRunTokenRef.current !== runToken) {
-            return;
-          }
-          setProgress(nextProgress);
+          const progressGuard: NestingWorkerResultGuard = {
+            runToken,
+            activeRunToken: activeRunTokenRef.current,
+            modelRevisionAtRunStart,
+            currentModelRevision: getModelRevision(),
+          };
+          const shouldApplyProgress =
+            shouldApplyNestingWorkerResult(progressGuard);
+
           setPreviewState((currentPreviewState) =>
-            reduceNestingPreviewState(currentPreviewState, {
-              type: 'progress',
+            reduceNestingPreviewStateWithGuard(currentPreviewState, {
+              ...progressGuard,
               progress: nextProgress,
             })
           );
+
+          if (!shouldApplyProgress) {
+            return;
+          }
+
+          setProgress(nextProgress);
         },
       });
 
