@@ -3,24 +3,14 @@ import type {
   PlacementCandidate,
   PlacementScore,
 } from '@/lib/nesting/placement/place-types';
-import type { Point, PolygonShape } from '@/lib/nesting/polygon/types';
+import type { PolygonShape } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 
-const POINT_EPSILON = 1e-6;
-
-export const roundPointValue = (value: number) =>
-  Math.round(value / POINT_EPSILON) * POINT_EPSILON;
-
-export const pointKey = (point: Point) =>
-  `${roundPointValue(point.x)}:${roundPointValue(point.y)}`;
-
-export const sortByYThenX = (a: Point, b: Point) => {
-  if (Math.abs(a.y - b.y) > NESTING_EPSILON) {
-    return a.y - b.y;
-  }
-
-  return a.x - b.x;
-};
+export {
+  pointKey,
+  roundPointValue,
+  sortByYThenX,
+} from '@/lib/nesting/polygon/point-utils';
 
 export const scorePlacement = (
   candidateShape: PolygonShape,

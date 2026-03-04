@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  dedupePoints,
+  dedupeContourPoints,
   normalizeContour,
   normalizeShape,
   removeCollinearPoints,
@@ -20,7 +20,7 @@ describe('polygon cleanup', () => {
       { x: 0, y: 0 },
     ];
 
-    const deduped = dedupePoints(contour);
+    const deduped = dedupeContourPoints(contour);
     expect(deduped).toHaveLength(4);
   });
 

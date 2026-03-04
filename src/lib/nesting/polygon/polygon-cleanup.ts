@@ -11,7 +11,7 @@ const pointsEqual = (
   Math.abs(a.x - b.x) <= CLEANUP_EPSILON &&
   Math.abs(a.y - b.y) <= CLEANUP_EPSILON;
 
-export function dedupePoints(contour: Contour): Contour {
+export function dedupeContourPoints(contour: Contour): Contour {
   if (contour.length === 0) {
     return [];
   }
@@ -134,7 +134,7 @@ const pointInContour = (point: { x: number; y: number }, contour: Contour) => {
 };
 
 export function normalizeContour(contour: Contour): Contour {
-  const deduped = dedupePoints(contour);
+  const deduped = dedupeContourPoints(contour);
   const cleaned = removeCollinearPoints(deduped);
 
   if (cleaned.length < 3) {

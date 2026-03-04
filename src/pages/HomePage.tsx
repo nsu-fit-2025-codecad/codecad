@@ -13,12 +13,6 @@ import { NestingStatus } from '@/components/nesting-status';
 import { useNestingController } from '@/lib/nesting/controller/use-nesting-controller';
 import { renderModelToSvg } from '@/lib/svg-render';
 
-export { normalizePackingOptions as normalizeNestingOptions } from '@/lib/nesting/orchestration/options';
-export {
-  shouldApplyNestingWorkerResult,
-  shouldShowNestingStatus,
-} from '@/lib/nesting/controller/use-nesting-controller';
-
 interface ResolveDisplayedSvgInput {
   committedSvg: string;
   previewSvg: string | null;

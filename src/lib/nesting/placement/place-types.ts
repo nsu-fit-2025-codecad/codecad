@@ -1,8 +1,4 @@
-import type {
-  NestPlacement,
-  Point,
-  PolygonShape,
-} from '@/lib/nesting/polygon/types';
+import type { NestPlacement, PolygonShape } from '@/lib/nesting/polygon/types';
 
 export interface PlacementScore {
   area: number;
@@ -31,26 +27,4 @@ export interface PlacedPartState {
   normalizedShape: PolygonShape;
   holeRegions: HoleRegion[];
   shape: PolygonShape;
-}
-
-export interface RotationCandidateInput {
-  bin: PolygonShape;
-  normalizedShape: PolygonShape;
-  placedParts: PlacedPartState[];
-  gap: number;
-  nfpCache: {
-    getOrBuild: (
-      key: {
-        stationaryId: string;
-        movingId: string;
-        inside: boolean;
-        stationaryRotation: number;
-        movingRotation: number;
-        gap: number;
-      },
-      builder: () => { points: Point[] }
-    ) => { points: Point[] };
-  };
-  partId: string;
-  rotation: number;
 }

@@ -1,17 +1,14 @@
 import type { Point, PolygonShape } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 import {
-  pointKey,
-  roundPointValue,
+  contourPoints,
+  dedupePoints,
   sortByYThenX,
-} from '@/lib/nesting/placement/place-score';
+} from '@/lib/nesting/polygon/point-utils';
 
 const MAX_PAIRWISE_SHAPE_POINTS = 24;
 const MAX_CANDIDATES_PER_ROTATION = 800;
 const PRIORITY_CANDIDATES_PER_ROTATION = 400;
-
-const contourPoints = (shape: PolygonShape): Point[] =>
-  shape.contours.flatMap((contour) => contour.map((point) => ({ ...point })));
 
 const samplePoints = (points: Point[], maxPoints: number): Point[] => {
   if (points.length <= maxPoints) {
@@ -28,26 +25,7 @@ const samplePoints = (points: Point[], maxPoints: number): Point[] => {
   return sampled;
 };
 
-export const dedupePoints = (points: Point[]): Point[] => {
-  const seen = new Set<string>();
-  const unique: Point[] = [];
-
-  points.forEach((point) => {
-    const key = pointKey(point);
-
-    if (seen.has(key)) {
-      return;
-    }
-
-    seen.add(key);
-    unique.push({
-      x: roundPointValue(point.x),
-      y: roundPointValue(point.y),
-    });
-  });
-
-  return unique;
-};
+export { dedupePoints } from '@/lib/nesting/polygon/point-utils';
 
 export const limitCandidatePoints = (points: Point[]): Point[] => {
   const sorted = [...points].sort(sortByYThenX);

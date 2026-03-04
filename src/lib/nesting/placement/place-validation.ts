@@ -1,7 +1,4 @@
-import {
-  isShapeInsideBin,
-  polygonsOverlap,
-} from '@/lib/nesting/polygon/polygon-boolean';
+import { polygonsOverlap } from '@/lib/nesting/polygon/polygon-boolean';
 import type { PolygonShape, Point } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 
@@ -42,4 +39,4 @@ export const overlapsPlacedShapes = (
     polygonsOverlap(candidateShape, placedShape, gap)
   );
 
-export { isShapeInsideBin };
+export { isShapeInsideBin } from '@/lib/nesting/polygon/polygon-boolean';

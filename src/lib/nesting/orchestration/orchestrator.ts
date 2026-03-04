@@ -1,7 +1,9 @@
+import type { GeneticProgressSnapshot } from '@/lib/nesting/genetic/genetic-types';
 import {
   compareFitness,
   evaluateNestFitness,
 } from '@/lib/nesting/genetic/fitness';
+import type { FitnessScore } from '@/lib/nesting/genetic/fitness';
 import { runGeneticSearch } from '@/lib/nesting/genetic/genetic';
 import { decideGeneticExecution } from '@/lib/nesting/orchestration/genetic-policy';
 import { applyPlacementToModelMap } from '@/lib/nesting/orchestration/model-assembly';
@@ -83,6 +85,62 @@ const shouldEmitDeterministicPreview = (
   );
 };
 
+const createGaProgressHandler = (
+  prepared: PreparedNestInput,
+  deterministicPlacementResult: NestResult,
+  deterministicFitness: FitnessScore,
+  callbacks: PackingRunCallbacks
+) => {
+  const deterministicBaselinePreview = buildPreviewFromResult(
+    prepared,
+    deterministicPlacementResult
+  );
+  let currentBestGaPreview:
+    | ReturnType<typeof buildPreviewFromResult>
+    | undefined;
+  let currentBestGaPreviewKey: string | null = null;
+  let lastEmittedPreviewKey = 'deterministic';
+
+  return (progress: GeneticProgressSnapshot) => {
+    const ratio =
+      progress.totalGenerations > 0
+        ? progress.generation / progress.totalGenerations
+        : 1;
+
+    if (progress.bestImproved && progress.bestResult) {
+      if (compareFitness(progress.bestFitness, deterministicFitness) < 0) {
+        currentBestGaPreview = buildPreviewFromResult(
+          prepared,
+          progress.bestResult
+        );
+        currentBestGaPreviewKey = `ga-${progress.evaluations}`;
+      } else {
+        currentBestGaPreview = undefined;
+        currentBestGaPreviewKey = null;
+      }
+    }
+
+    const effectivePreviewKey = currentBestGaPreviewKey ?? 'deterministic';
+    const shouldEmitPreview = effectivePreviewKey !== lastEmittedPreviewKey;
+
+    if (shouldEmitPreview) {
+      lastEmittedPreviewKey = effectivePreviewKey;
+    }
+
+    callbacks.onProgress?.({
+      phase: 'genetic',
+      progress: 0.45 + ratio * 0.5,
+      message: 'Running genetic search',
+      generation: progress.generation,
+      totalGenerations: progress.totalGenerations,
+      bestFitness: progress.bestFitness,
+      preview: shouldEmitPreview
+        ? (currentBestGaPreview ?? deterministicBaselinePreview)
+        : undefined,
+    });
+  };
+};
+
 export const runNestingEngine = (
   prepared: PreparedNestInput,
   options: NormalizedPackingOptions,
@@ -159,60 +217,12 @@ export const runNestingEngine = (
       seed: options.geneticSeed,
     },
     {
-      onProgress: (() => {
-        const deterministicBaselinePreview = buildPreviewFromResult(
-          prepared,
-          deterministicPlacementResult
-        );
-        let currentBestGaPreview:
-          | ReturnType<typeof buildPreviewFromResult>
-          | undefined;
-        let currentBestGaPreviewKey: string | null = null;
-        let lastEmittedPreviewKey = 'deterministic';
-
-        return (progress) => {
-          const ratio =
-            progress.totalGenerations > 0
-              ? progress.generation / progress.totalGenerations
-              : 1;
-
-          if (progress.bestImproved && progress.bestResult) {
-            if (
-              compareFitness(progress.bestFitness, deterministicFitness) < 0
-            ) {
-              currentBestGaPreview = buildPreviewFromResult(
-                prepared,
-                progress.bestResult
-              );
-              currentBestGaPreviewKey = `ga-${progress.evaluations}`;
-            } else {
-              currentBestGaPreview = undefined;
-              currentBestGaPreviewKey = null;
-            }
-          }
-
-          const effectivePreviewKey =
-            currentBestGaPreviewKey ?? 'deterministic';
-          const shouldEmitPreview =
-            effectivePreviewKey !== lastEmittedPreviewKey;
-
-          if (shouldEmitPreview) {
-            lastEmittedPreviewKey = effectivePreviewKey;
-          }
-
-          callbacks.onProgress?.({
-            phase: 'genetic',
-            progress: 0.45 + ratio * 0.5,
-            message: 'Running genetic search',
-            generation: progress.generation,
-            totalGenerations: progress.totalGenerations,
-            bestFitness: progress.bestFitness,
-            preview: shouldEmitPreview
-              ? (currentBestGaPreview ?? deterministicBaselinePreview)
-              : undefined,
-          });
-        };
-      })(),
+      onProgress: createGaProgressHandler(
+        prepared,
+        deterministicPlacementResult,
+        deterministicFitness,
+        callbacks
+      ),
     }
   );
 

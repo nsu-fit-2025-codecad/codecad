@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { normalizePackingOptions as normalizeNestingOptions } from '@/lib/nesting/orchestration/options';
 import {
-  normalizeNestingOptions,
-  resolveDisplayedSvg,
   shouldApplyNestingWorkerResult,
   shouldShowNestingStatus,
-} from '@/pages/HomePage';
+} from '@/lib/nesting/controller/use-nesting-controller';
+import { resolveDisplayedSvg } from '@/pages/HomePage';
 
 describe('shouldApplyNestingWorkerResult', () => {
   it('returns false when a newer model revision exists', () => {
