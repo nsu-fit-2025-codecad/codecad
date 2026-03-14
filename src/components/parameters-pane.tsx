@@ -50,9 +50,17 @@ export const ParametersPane = ({
         <CardContent>
           <FieldSet>
             {parameters.map((parameter) => (
-              <Field key={parameter.name}>
-                <FieldTitle>{parameter.name}</FieldTitle>
-                <FieldDescription>{parameter.value}</FieldDescription>
+              <Field
+                key={parameter.name}
+                orientation="horizontal"
+                className="[&>[data-slot=field-label]]:!flex-none"
+              >
+                <FieldTitle className="shrink-0 self-baseline leading-none">
+                  {parameter.name}
+                </FieldTitle>
+                <FieldDescription className="shrink-0 self-baseline !mt-0 leading-none">
+                  {parameter.value}
+                </FieldDescription>
                 <Slider
                   value={[parameter.value]}
                   onValueChange={(values) =>
@@ -61,7 +69,7 @@ export const ParametersPane = ({
                   min={parameter.min}
                   max={parameter.max}
                   step={parameter.step}
-                  className="mt-2 w-full"
+                  className="w-full flex-1"
                 />
               </Field>
             ))}
