@@ -19,7 +19,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParametersStore } from '@/store/store';
 import { useState } from 'react';
-import { RESERVED_WORDS } from '@/lib/constants';
+import { RESERVED_RUNTIME_IDENTIFIERS, RESERVED_WORDS } from '@/lib/constants';
 
 const addParameterFormSchema = (existingNames: string[]) =>
   z.object({
@@ -30,6 +30,10 @@ const addParameterFormSchema = (existingNames: string[]) =>
       .refine(
         (name) => !RESERVED_WORDS.has(name),
         'Cannot use reserved JavaScript keyword'
+      )
+      .refine(
+        (name) => !RESERVED_RUNTIME_IDENTIFIERS.has(name),
+        'Cannot use reserved runtime identifier'
       )
       .refine(
         (name) => !existingNames.includes(name),

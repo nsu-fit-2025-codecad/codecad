@@ -34,3 +34,5 @@ export const RESERVED_WORDS = new Set([
   'with',
   'yield',
 ]);
+
+export const RESERVED_RUNTIME_IDENTIFIERS = new Set(['cad', 'makerjs']);
