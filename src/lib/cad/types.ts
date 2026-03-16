@@ -4,6 +4,18 @@ export type Point2D = readonly [number, number];
 
 export type MirrorAxis = 'x' | 'y';
 
+export type Anchor2D =
+  | 'origin'
+  | 'center'
+  | 'topLeft'
+  | 'top'
+  | 'topRight'
+  | 'right'
+  | 'bottomRight'
+  | 'bottom'
+  | 'bottomLeft'
+  | 'left';
+
 export interface NodeMetadata {
   layer?: string;
   tags?: readonly string[];
@@ -35,6 +47,11 @@ export interface PolylineNode extends BaseNode {
   readonly kind: 'polyline';
   readonly points: readonly Point2D[];
   readonly closed: boolean;
+}
+
+export interface MakerModelNode extends BaseNode {
+  readonly kind: 'makerModel';
+  readonly model: IModel;
 }
 
 export type PrimitiveNode =
@@ -88,6 +105,7 @@ export interface TransformNode extends BaseNode {
 export interface AssemblyNode extends BaseNode {
   readonly kind: 'assembly';
   readonly children: Readonly<Record<string, EntityNode>>;
+  readonly placementChildId?: string;
 }
 
 export interface SketchNode extends BaseNode {
@@ -97,9 +115,83 @@ export interface SketchNode extends BaseNode {
 
 export type EntityNode =
   | PrimitiveNode
+  | MakerModelNode
   | BooleanNode
   | TransformNode
   | AssemblyNode;
+
+export interface CircleHoleSpec {
+  readonly kind: 'circle';
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+}
+
+export interface SlotHoleSpec {
+  readonly kind: 'slot';
+  readonly x: number;
+  readonly y: number;
+  readonly length: number;
+  readonly width: number;
+  readonly angleDeg?: number;
+}
+
+export type PanelHoleSpec = CircleHoleSpec | SlotHoleSpec;
+
+export interface PanelInsetOptions {
+  readonly margin: number;
+  readonly radius?: number;
+}
+
+export interface PanelOptions {
+  readonly width: number;
+  readonly height: number;
+  readonly radius?: number;
+  readonly inset?: PanelInsetOptions;
+  readonly holes?: readonly PanelHoleSpec[];
+}
+
+export interface GearOptions {
+  readonly teeth: number;
+  readonly outerRadius: number;
+  readonly rootRadius: number;
+  readonly bore?: number;
+  readonly toothFraction?: number;
+  readonly rootFraction?: number;
+  readonly tipFraction?: number;
+  readonly rotationDeg?: number;
+}
+
+export interface SpokeWheelOptions {
+  readonly outerRadius: number;
+  readonly innerRadius: number;
+  readonly spokes: number;
+  readonly spokeWidth?: number;
+  readonly hubRadius?: number;
+  readonly bore?: number;
+}
+
+export interface ClockFaceOptions {
+  readonly radius: number;
+  readonly rimWidth?: number;
+  readonly tickCount?: number;
+  readonly tickLength?: number;
+  readonly tickWidth?: number;
+  readonly centerHole?: number;
+}
+
+export interface PolarArrayOptions {
+  readonly radius?: number;
+  readonly origin?: Point2D;
+  readonly startAngleDeg?: number;
+  readonly rotateItems?: boolean;
+}
+
+export interface SvgPathImportOptions {
+  readonly bezierAccuracy?: number;
+}
+
+export type AlignTarget = Shape2DLike | Assembly2DLike | Point2D;
 
 export interface Shape2DLike {
   getNode(): EntityNode;
@@ -107,6 +199,28 @@ export interface Shape2DLike {
   rotate(angleDeg: number, origin?: Point2D): Shape2DLike;
   scale(factor: number, origin?: Point2D): Shape2DLike;
   mirror(axis: MirrorAxis): Shape2DLike;
+  union(other: Shape2DLike | Assembly2DLike): Shape2DLike;
+  cut(other: Shape2DLike | Assembly2DLike): Shape2DLike;
+  intersect(other: Shape2DLike | Assembly2DLike): Shape2DLike;
+  moveTo(point: Point2D, anchor?: Anchor2D): Shape2DLike;
+  centerAt(point: Point2D): Shape2DLike;
+  alignTo(
+    target: AlignTarget,
+    fromAnchor?: Anchor2D,
+    toAnchor?: Anchor2D
+  ): Shape2DLike;
+  array(count: number, stepX: number, stepY?: number): Assembly2DLike;
+  grid(
+    columns: number,
+    rows: number,
+    stepX: number,
+    stepY: number
+  ): Assembly2DLike;
+  polarArray(
+    count: number,
+    angleStepDeg: number,
+    options?: PolarArrayOptions
+  ): Assembly2DLike;
   onLayer(layer: string): Shape2DLike;
   tag(...tags: string[]): Shape2DLike;
 }
@@ -122,10 +236,32 @@ export interface SketchLike {
 export interface CadRuntime {
   rect(width: number, height: number): Shape2DLike;
   circle(radius: number): Shape2DLike;
+  ring(outerRadius: number, innerRadius: number): Shape2DLike;
   roundRect(width: number, height: number, radius: number): Shape2DLike;
+  capsule(width: number, height: number): Shape2DLike;
+  slot(length: number, width: number): Shape2DLike;
   polyline(
     points: readonly Point2D[],
     options?: { closed?: boolean }
+  ): Shape2DLike;
+  trackPath(
+    points: readonly Point2D[],
+    width: number,
+    options?: { closed?: boolean }
+  ): Shape2DLike;
+  frame(
+    width: number,
+    height: number,
+    thickness: number,
+    options?: { radius?: number }
+  ): Shape2DLike;
+  panel(options: PanelOptions): Assembly2DLike;
+  spokeWheel(options: SpokeWheelOptions): Shape2DLike;
+  gear(options: GearOptions): Shape2DLike;
+  clockFace(options: ClockFaceOptions): Assembly2DLike;
+  fromSvgPathData(
+    pathData: string,
+    options?: SvgPathImportOptions
   ): Shape2DLike;
   assembly(
     children: Record<string, Shape2DLike | Assembly2DLike>

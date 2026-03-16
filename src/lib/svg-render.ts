@@ -12,12 +12,6 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const ROOT_MODEL_GROUP_SELECTOR = 'g#svgGroup';
 const OUTLINE_SVG_OPTIONS = { useSvgPathOnly: false } as const;
 const SVG_PATH_DATA_OPTIONS = { fillRule: MODEL_FILL_RULE } as const;
-const SVG_PATH_DATA_BY_LAYER_OPTIONS = {
-  byLayers: true,
-  fillRule: MODEL_FILL_RULE,
-} as const;
-const INCLUDED_LAYER_PREFIX = 'included::';
-const EXCLUDED_LAYER_PREFIX = 'excluded::';
 
 interface ModelFillLayer {
   modelId: string;
@@ -35,13 +29,18 @@ export const renderModelToSvg = (
   options: RenderModelToSvgOptions = {}
 ): string => {
   const renderableModel = buildRenderableModel(model, options.excludedModelIds);
-  const outlineSvg = makerjs.exporter.toSVG(
-    renderableModel,
-    OUTLINE_SVG_OPTIONS
-  );
   const filledModelIds = resolveFilledModelIds(
     renderableModel,
     options.filledModelIds
+  );
+
+  if (hasTopLevelModels(renderableModel)) {
+    return renderTopLevelModelsToSvg(renderableModel, filledModelIds);
+  }
+
+  const outlineSvg = makerjs.exporter.toSVG(
+    renderableModel,
+    OUTLINE_SVG_OPTIONS
   );
 
   if (filledModelIds.size === 0) {
@@ -63,6 +62,54 @@ export const getStableModelFillColor = (modelId: string): string => {
   const saturation = 58 + ((hash >>> 8) % 18);
   const lightness = 52 + ((hash >>> 16) % 8);
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
+
+const hasTopLevelModels = (model: IModel): boolean =>
+  Boolean(model.models && Object.keys(model.models).length > 0);
+
+const renderTopLevelModelsToSvg = (
+  model: IModel,
+  filledModelIds: Set<string>
+): string => {
+  const rootExtents = makerjs.measure.modelExtents(model);
+
+  if (!rootExtents) {
+    return makerjs.exporter.toSVG(model, OUTLINE_SVG_OPTIONS);
+  }
+
+  const rootOffsetX = -rootExtents.low[0];
+  const rootHighY = rootExtents.high[1];
+  const width = rootExtents.high[0] - rootExtents.low[0];
+  const height = rootExtents.high[1] - rootExtents.low[1];
+  const fillLayers = buildTopLevelFillLayers(model, filledModelIds);
+  const outlineMarkup = Object.entries(model.models ?? {})
+    .map(([modelId, modelEntry]) =>
+      createTopLevelOutlineMarkup(modelId, modelEntry, rootOffsetX, rootHighY)
+    )
+    .join('');
+  const fillMarkup =
+    fillLayers.length > 0 ? createFillOverlayMarkup(fillLayers) : '';
+
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="${SVG_NAMESPACE}"><g id="svgGroup" stroke-linecap="round" fill-rule="${MODEL_FILL_RULE}" font-size="9pt" stroke="#000" stroke-width="0.25mm" fill="none" style="stroke:#000;stroke-width:0.25mm;fill:none">${fillMarkup}<g id="0">${outlineMarkup}</g></g></svg>`;
+};
+
+const createTopLevelOutlineMarkup = (
+  modelId: string,
+  modelEntry: IModel,
+  rootOffsetX: number,
+  rootHighY: number
+): string => {
+  const pathData = makerjs.exporter.toSVGPathData(
+    makerjs.model.clone(modelEntry),
+    false,
+    [rootOffsetX, rootHighY]
+  );
+
+  if (typeof pathData !== 'string' || pathData.trim().length === 0) {
+    return `<g id="${escapeAttributeValue(modelId)}"></g>`;
+  }
+
+  return `<g id="${escapeAttributeValue(modelId)}"><path d="${escapeAttributeValue(pathData)}" vector-effect="non-scaling-stroke"/></g>`;
 };
 
 const buildModelFillLayers = (
@@ -98,61 +145,48 @@ const buildTopLevelFillLayers = (
   model: IModel,
   filledModelIds: Set<string>
 ): ModelFillLayer[] => {
-  const topLevelModelIds = Object.keys(model.models ?? {});
-  const requestedModelIds = topLevelModelIds.filter((modelId) =>
+  const requestedModelIds = Object.keys(model.models ?? {}).filter((modelId) =>
     filledModelIds.has(modelId)
   );
+  const rootExtents = makerjs.measure.modelExtents(model);
 
-  if (requestedModelIds.length === 0) {
-    return [];
-  }
-
-  const layeredModel = makerjs.model.clone(model);
-  const layeredModelMap = layeredModel.models ?? {};
-
-  topLevelModelIds.forEach((modelId) => {
-    const modelEntry = layeredModelMap[modelId];
-
-    if (!modelEntry) {
-      return;
-    }
-
-    const layerId = filledModelIds.has(modelId)
-      ? toIncludedLayerId(modelId)
-      : toExcludedLayerId(modelId);
-    applyLayerRecursively(modelEntry, layerId);
-  });
-
-  const byLayerPathData = makerjs.exporter.toSVGPathData(
-    layeredModel,
-    SVG_PATH_DATA_BY_LAYER_OPTIONS
-  );
-
-  if (typeof byLayerPathData === 'string') {
+  if (requestedModelIds.length === 0 || !rootExtents) {
     return [];
   }
 
   return requestedModelIds
     .map((modelId) =>
-      createModelFillLayer(modelId, byLayerPathData[toIncludedLayerId(modelId)])
+      buildTopLevelFillLayer(
+        model,
+        modelId,
+        -rootExtents.low[0],
+        rootExtents.high[1]
+      )
     )
     .flatMap((fillLayer) => (fillLayer ? [fillLayer] : []));
 };
 
-const applyLayerRecursively = (model: IModel, layerId: string): void => {
-  model.layer = layerId;
+const buildTopLevelFillLayer = (
+  model: IModel,
+  modelId: string,
+  rootOffsetX: number,
+  rootHighY: number
+): ModelFillLayer | null => {
+  const modelEntry = model.models?.[modelId];
 
-  if (model.paths) {
-    Object.values(model.paths).forEach((path) => {
-      path.layer = layerId;
-    });
+  if (!modelEntry) {
+    return null;
   }
 
-  if (model.models) {
-    Object.values(model.models).forEach((childModel) => {
-      applyLayerRecursively(childModel, layerId);
-    });
-  }
+  const pathData = makerjs.exporter.toSVGPathData(
+    makerjs.model.clone(modelEntry),
+    false,
+    [rootOffsetX, rootHighY]
+  );
+
+  return typeof pathData === 'string'
+    ? createModelFillLayer(modelId, pathData)
+    : null;
 };
 
 const createModelFillLayer = (
@@ -346,12 +380,6 @@ const createModelFillLayerMarkup = (fillLayer: ModelFillLayer): string => {
 
 const findSvgGroupStartTagMatch = (svgString: string): RegExpExecArray | null =>
   /<g\b[^>]*\sid=(['"])svgGroup\1[^>]*>/i.exec(svgString);
-
-const toIncludedLayerId = (modelId: string): string =>
-  `${INCLUDED_LAYER_PREFIX}${modelId}`;
-
-const toExcludedLayerId = (modelId: string): string =>
-  `${EXCLUDED_LAYER_PREFIX}${modelId}`;
 
 const escapeAttributeValue = (value: string): string => {
   return value
