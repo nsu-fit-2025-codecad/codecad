@@ -3,6 +3,7 @@ import React from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { configureCadEditor } from '@/lib/cad/editor';
 import { useTheme } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/store/store';
@@ -26,6 +27,7 @@ export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
             height="100%"
             width="100%"
             defaultLanguage="javascript"
+            beforeMount={configureCadEditor}
             value={code}
             onChange={editCode}
             theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs-light'}

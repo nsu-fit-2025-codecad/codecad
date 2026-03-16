@@ -1,6 +1,8 @@
 import makerjs, { IModel } from 'makerjs';
 import { describe, expect, it } from 'vitest';
+import { cad, normalizeEditorModelResult } from '@/lib/cad/runtime';
 import { packModelsIntoTargetModel } from '@/lib/nesting';
+import { DEFAULT_EDITOR_CODE } from '@/store/store';
 import {
   MODEL_FILL_ATTRIBUTE,
   MODEL_FILL_FOR_ATTRIBUTE,
@@ -50,6 +52,114 @@ const createMixedFixture = (): IModel => {
   };
 };
 
+const createBusyBoardFixture = (): IModel => {
+  const createModel = new Function(
+    'makerjs',
+    'cad',
+    `return (function () {
+      ${DEFAULT_EDITOR_CODE}
+    })();`
+  );
+
+  return normalizeEditorModelResult(createModel(makerjs, cad));
+};
+
+const createTranslatedHelperFixture = (): IModel =>
+  normalizeEditorModelResult(
+    cad.sketch({
+      helper: cad
+        .panel({
+          width: 100,
+          height: 70,
+          radius: 10,
+          inset: { margin: 12, radius: 6 },
+          holes: [{ kind: 'circle', x: 50, y: 35, radius: 5 }],
+        })
+        .translate(85, 45),
+      marker: cad.circle(8).centerAt([30, 20]),
+    })
+  );
+
+const createOffsetViewportFixture = (): IModel => {
+  const translatedPanel = cad
+    .panel({
+      width: 120,
+      height: 90,
+      radius: 12,
+      inset: { margin: 14, radius: 8 },
+    })
+    .translate(80, 120);
+  const translatedGear = cad
+    .gear({
+      teeth: 12,
+      outerRadius: 28,
+      rootRadius: 20,
+      bore: 8,
+    })
+    .centerAt([115, 165]);
+
+  return normalizeEditorModelResult(
+    cad.sketch({
+      panel: translatedPanel,
+      gear: translatedGear,
+    })
+  );
+};
+
+const createParameterizedTargetFixture = (height: number): IModel =>
+  normalizeEditorModelResult(
+    cad.sketch({
+      door: cad
+        .panel({
+          width: 120,
+          height: 92,
+          radius: 14,
+          inset: { margin: 16, radius: 8 },
+          holes: [
+            { kind: 'circle', x: 18, y: 18, radius: 3 },
+            { kind: 'circle', x: 102, y: 18, radius: 3 },
+            { kind: 'circle', x: 18, y: 74, radius: 3 },
+            { kind: 'circle', x: 102, y: 74, radius: 3 },
+          ],
+        })
+        .onLayer('cut'),
+      target: cad.roundRect(238, height, 25),
+      gear: cad
+        .gear({
+          teeth: 14,
+          outerRadius: 34,
+          rootRadius: 25,
+          bore: 10,
+          rotationDeg: 1,
+          rootFraction: 0.01,
+          toothFraction: 0.05,
+        })
+        .centerAt([44, 45])
+        .onLayer('cut')
+        .translate(0, 130),
+      clock: cad.clockFace({
+        radius: 42,
+        rimWidth: 8,
+        tickCount: 12,
+        centerHole: 6,
+      }),
+      maze: cad
+        .trackPath(
+          [
+            [0, 0],
+            [60, 0],
+            [60, 30],
+            [25, 30],
+            [25, 65],
+            [85, 65],
+          ],
+          10
+        )
+        .onLayer('etch')
+        .translate(150, 145),
+    })
+  );
+
 describe('renderModelToSvg', () => {
   it('fills every top-level model in mixed editor fixture', () => {
     const model = createMixedFixture();
@@ -67,10 +177,12 @@ describe('renderModelToSvg', () => {
   });
 
   it('keeps model fills aligned with outlines before nesting', () => {
-    const svg = renderModelToSvg(createMixedFixture());
+    const model = createMixedFixture();
+    const svg = renderModelToSvg(model);
 
-    expectFillAlignedToOutline(svg, 'target');
-    expectFillAlignedToOutline(svg, 'movedPart');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'target');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'movedPart');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'nestedPart');
   });
 
   it('keeps model fills aligned and visible after nesting', () => {
@@ -90,8 +202,9 @@ describe('renderModelToSvg', () => {
       expect(svg).toContain(`${MODEL_FILL_FOR_ATTRIBUTE}="${modelId}"`);
     });
 
-    expectFillAlignedToOutline(svg, 'target');
-    expectFillAlignedToOutline(svg, 'movedPart');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'target');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'movedPart');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'nestedPart');
   });
 
   it('preserves holes inside a model and keeps sibling fills separate', () => {
@@ -129,38 +242,103 @@ describe('renderModelToSvg', () => {
     expect(selectedTag).toContain(`${SELECTED_MODEL_ATTRIBUTE}="true"`);
     expect(highlightedSvg).toContain(`${MODEL_FILL_FOR_ATTRIBUTE}="movedPart"`);
   });
+
+  it('keeps busy-board helper fills isolated per top-level model', () => {
+    const model = createBusyBoardFixture();
+    const svg = renderModelToSvg(model);
+
+    ['door', 'gear', 'clock', 'maze'].forEach((modelId) => {
+      expectFillMatchesRootSvgCoordinates(svg, model, modelId);
+    });
+  });
+
+  it('keeps busy-board helper fills aligned after nesting', () => {
+    const model = createBusyBoardFixture();
+    const result = packModelsIntoTargetModel(model, 'door', {
+      useGeneticSearch: false,
+      allowRotation: true,
+    });
+
+    expect(result).not.toBeNull();
+
+    const svg = result!.svgString;
+
+    ['door', 'gear', 'clock', 'maze'].forEach((modelId) => {
+      expectFillMatchesRootSvgCoordinates(svg, model, modelId);
+    });
+  });
+
+  it('keeps translated top-level helper fills in root SVG coordinates', () => {
+    const model = createTranslatedHelperFixture();
+    const svg = renderModelToSvg(model);
+
+    expectFillMatchesRootSvgCoordinates(svg, model, 'helper');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'marker');
+  });
+
+  it('keeps fills aligned when the root SVG viewBox has non-zero lowX and lowY', () => {
+    const model = createOffsetViewportFixture();
+    const svg = renderModelToSvg(model);
+
+    expectFillMatchesRootSvgCoordinates(svg, model, 'panel');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'gear');
+  });
+
+  it('keeps target outline and fill in sync across sequential height changes', () => {
+    renderModelToSvg(createParameterizedTargetFixture(432));
+
+    const nextModel = createParameterizedTargetFixture(352);
+    const nextSvg = renderModelToSvg(nextModel);
+
+    expectOutlineMatchesRootSvgCoordinates(nextSvg, nextModel, 'target');
+    expectFillMatchesRootSvgCoordinates(nextSvg, nextModel, 'target');
+  });
 });
 
-const expectFillAlignedToOutline = (
+const expectFillMatchesRootSvgCoordinates = (
   svgString: string,
+  model: IModel,
   modelId: string
 ): void => {
-  const modelGroup = getModelGroup(svgString, modelId);
   const fillLayer = getFillLayer(svgString, modelId);
   const fillPathTag = getFirstPathTag(fillLayer);
   const fillPathData = readTagAttribute(fillPathTag, 'd') ?? '';
+  const modelEntry = model.models?.[modelId];
+  const rootExtents = makerjs.measure.modelExtents(model);
 
   expect(fillLayer).not.toContain('transform=');
+  expect(modelEntry).toBeDefined();
+  expect(rootExtents).not.toBeNull();
 
-  const outlineBounds = extractLineBounds(modelGroup);
-  const fillBounds = extractPathBounds(fillPathData);
-
-  expect(fillBounds.minX).toBeCloseTo(outlineBounds.minX, 3);
-  expect(fillBounds.maxX).toBeCloseTo(outlineBounds.maxX, 3);
-  expect(fillBounds.minY).toBeCloseTo(outlineBounds.minY, 3);
-  expect(fillBounds.maxY).toBeCloseTo(outlineBounds.maxY, 3);
-};
-
-const getModelGroup = (svgString: string, modelId: string): string => {
-  const escapedModelId = escapeRegularExpression(modelId);
-  const match = svgString.match(
-    new RegExp(
-      `<g[^>]*\\sid=(['"])${escapedModelId}\\1[^>]*>[\\s\\S]*?<\\/g>`,
-      'i'
-    )
+  const expectedPathData = makerjs.exporter.toSVGPathData(
+    makerjs.model.clone(modelEntry!),
+    false,
+    [-rootExtents!.low[0], rootExtents!.high[1]]
   );
 
-  return match?.[0] ?? '';
+  expect(fillPathData).toBe(expectedPathData);
+};
+
+const expectOutlineMatchesRootSvgCoordinates = (
+  svgString: string,
+  model: IModel,
+  modelId: string
+): void => {
+  const outlineGroup = getOutlineGroup(svgString, modelId);
+  const outlinePathTag = getFirstPathTag(outlineGroup);
+  const outlinePathData = readTagAttribute(outlinePathTag, 'd') ?? '';
+  const modelEntry = model.models?.[modelId];
+  const rootExtents = makerjs.measure.modelExtents(model);
+
+  expect(modelEntry).toBeDefined();
+  expect(rootExtents).not.toBeNull();
+  const expectedPathData = makerjs.exporter.toSVGPathData(
+    makerjs.model.clone(modelEntry!),
+    false,
+    [-rootExtents!.low[0], rootExtents!.high[1]]
+  );
+
+  expect(outlinePathData).toBe(expectedPathData);
 };
 
 const getFillLayer = (svgString: string, modelId: string): string => {
@@ -180,6 +358,18 @@ const getFirstPathTag = (svgString: string): string => {
   return match?.[0] ?? '';
 };
 
+const getOutlineGroup = (svgString: string, modelId: string): string => {
+  const escapedModelId = escapeRegularExpression(modelId);
+  const groupMatch = svgString.match(
+    new RegExp(
+      `<g[^>]*id=(['"])${escapedModelId}\\1[^>]*>([\\s\\S]*?)<\\/g>`,
+      'i'
+    )
+  );
+
+  return groupMatch?.[0] ?? '';
+};
+
 const getFillColor = (svgString: string, modelId: string): string => {
   const fillLayer = getFillLayer(svgString, modelId);
   const fillPath = getFirstPathTag(fillLayer);
@@ -193,74 +383,6 @@ const getTagById = (svgString: string, id: string): string => {
   );
 
   return match?.[0] ?? '';
-};
-
-const extractLineBounds = (groupMarkup: string) => {
-  const lineTags = groupMarkup.match(/<line\b[^>]*>/gi) ?? [];
-
-  if (lineTags.length === 0) {
-    throw new Error('No outline line tags found');
-  }
-
-  const xValues: number[] = [];
-  const yValues: number[] = [];
-
-  lineTags.forEach((lineTag) => {
-    xValues.push(
-      parseRequiredNumber(readTagAttribute(lineTag, 'x1')),
-      parseRequiredNumber(readTagAttribute(lineTag, 'x2'))
-    );
-    yValues.push(
-      parseRequiredNumber(readTagAttribute(lineTag, 'y1')),
-      parseRequiredNumber(readTagAttribute(lineTag, 'y2'))
-    );
-  });
-
-  return {
-    minX: Math.min(...xValues),
-    maxX: Math.max(...xValues),
-    minY: Math.min(...yValues),
-    maxY: Math.max(...yValues),
-  };
-};
-
-const extractPathBounds = (pathData: string) => {
-  const values = (pathData.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? []).map(
-    Number
-  );
-
-  if (values.length < 4) {
-    throw new Error('Path data does not contain enough coordinates');
-  }
-
-  const xValues: number[] = [];
-  const yValues: number[] = [];
-
-  for (let index = 0; index + 1 < values.length; index += 2) {
-    xValues.push(values[index]);
-    yValues.push(values[index + 1]);
-  }
-
-  return {
-    minX: Math.min(...xValues),
-    maxX: Math.max(...xValues),
-    minY: Math.min(...yValues),
-    maxY: Math.max(...yValues),
-  };
-};
-
-const parseRequiredNumber = (value: string | null): number => {
-  if (value === null) {
-    throw new Error('Missing numeric SVG attribute');
-  }
-
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid numeric SVG attribute: ${value}`);
-  }
-
-  return parsed;
 };
 
 const countMatches = (value: string, pattern: string): number => {

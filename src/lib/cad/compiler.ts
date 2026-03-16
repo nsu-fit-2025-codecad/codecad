@@ -4,6 +4,7 @@ import type {
   BooleanNode,
   CircleNode,
   EntityNode,
+  MakerModelNode,
   MirrorAxis,
   NodeMetadata,
   Point2D,
@@ -61,6 +62,9 @@ const compilePolylineNode = (node: PolylineNode): IModel => {
 
   return { paths };
 };
+
+const compileMakerModelNode = (node: MakerModelNode): IModel =>
+  makerjs.model.clone(node.model);
 
 const mirrorEntityModel = (model: IModel, axis: MirrorAxis): IModel => {
   if (axis === 'x') {
@@ -159,6 +163,9 @@ export const compileToMaker = (node: EntityNode): IModel => {
     case 'roundRect':
     case 'polyline':
       model = compilePrimitiveNode(node);
+      break;
+    case 'makerModel':
+      model = compileMakerModelNode(node);
       break;
     case 'boolean':
       model = compileBooleanNode(node);
