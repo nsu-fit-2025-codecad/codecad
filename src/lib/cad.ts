@@ -1,0 +1,31 @@
+export { compileSketchToMaker, compileToMaker } from '@/lib/cad/compiler';
+export {
+  Assembly2D,
+  cad,
+  isAssembly2D,
+  isCadRenderable,
+  isMakerModelLike,
+  isShape2D,
+  isSketch,
+  normalizeEditorModelResult,
+  Shape2D,
+  Sketch,
+  toMakerModel,
+} from '@/lib/cad/runtime';
+export type {
+  AssemblyNode,
+  BooleanNode,
+  CadRuntime,
+  CircleNode,
+  EntityNode,
+  MirrorAxis,
+  NodeMetadata,
+  Point2D,
+  PolylineNode,
+  PrimitiveNode,
+  RectNode,
+  RoundRectNode,
+  SketchNode,
+  Transform2D,
+  TransformNode,
+} from '@/lib/cad/types';

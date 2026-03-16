@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import makerjs, { IModel } from 'makerjs';
 import { ParametersPane } from '@/components/parameters-pane';
 import { useEditorStore, useParametersStore } from '@/store/store';
+import { cad, normalizeEditorModelResult } from '@/lib/cad';
 import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
@@ -116,16 +117,19 @@ export const HomePage = () => {
     try {
       const createModel = new Function(
         'makerjs',
+        'cad',
         ...parameters.map((parameter) => parameter.name),
         `return (function() {
           ${code}
         })();`
       );
 
-      const nextModel: IModel = createModel(
+      const executionResult = createModel(
         makerjs,
+        cad,
         ...parameters.map((parameter) => parameter.value)
       );
+      const nextModel: IModel = normalizeEditorModelResult(executionResult);
 
       setModel(nextModel);
       if (nextModel.models) {

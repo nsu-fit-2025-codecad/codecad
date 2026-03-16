@@ -1,0 +1,135 @@
+import type { IModel } from 'makerjs';
+
+export type Point2D = readonly [number, number];
+
+export type MirrorAxis = 'x' | 'y';
+
+export interface NodeMetadata {
+  layer?: string;
+  tags?: readonly string[];
+}
+
+interface BaseNode {
+  readonly metadata: NodeMetadata;
+}
+
+export interface RectNode extends BaseNode {
+  readonly kind: 'rect';
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface CircleNode extends BaseNode {
+  readonly kind: 'circle';
+  readonly radius: number;
+}
+
+export interface RoundRectNode extends BaseNode {
+  readonly kind: 'roundRect';
+  readonly width: number;
+  readonly height: number;
+  readonly radius: number;
+}
+
+export interface PolylineNode extends BaseNode {
+  readonly kind: 'polyline';
+  readonly points: readonly Point2D[];
+  readonly closed: boolean;
+}
+
+export type PrimitiveNode =
+  | RectNode
+  | CircleNode
+  | RoundRectNode
+  | PolylineNode;
+
+export interface TranslateTransform {
+  readonly type: 'translate';
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface RotateTransform {
+  readonly type: 'rotate';
+  readonly angleDeg: number;
+  readonly origin?: Point2D;
+}
+
+export interface ScaleTransform {
+  readonly type: 'scale';
+  readonly factor: number;
+  readonly origin?: Point2D;
+}
+
+export interface MirrorTransform {
+  readonly type: 'mirror';
+  readonly axis: MirrorAxis;
+}
+
+export type Transform2D =
+  | TranslateTransform
+  | RotateTransform
+  | ScaleTransform
+  | MirrorTransform;
+
+export interface BooleanNode extends BaseNode {
+  readonly kind: 'boolean';
+  readonly operation: 'union' | 'cut' | 'intersect';
+  readonly left: EntityNode;
+  readonly right: EntityNode;
+}
+
+export interface TransformNode extends BaseNode {
+  readonly kind: 'transform';
+  readonly child: EntityNode;
+  readonly transform: Transform2D;
+}
+
+export interface AssemblyNode extends BaseNode {
+  readonly kind: 'assembly';
+  readonly children: Readonly<Record<string, EntityNode>>;
+}
+
+export interface SketchNode extends BaseNode {
+  readonly kind: 'sketch';
+  readonly children: Readonly<Record<string, EntityNode>>;
+}
+
+export type EntityNode =
+  | PrimitiveNode
+  | BooleanNode
+  | TransformNode
+  | AssemblyNode;
+
+export interface Shape2DLike {
+  getNode(): EntityNode;
+  translate(x: number, y: number): Shape2DLike;
+  rotate(angleDeg: number, origin?: Point2D): Shape2DLike;
+  scale(factor: number, origin?: Point2D): Shape2DLike;
+  mirror(axis: MirrorAxis): Shape2DLike;
+  onLayer(layer: string): Shape2DLike;
+  tag(...tags: string[]): Shape2DLike;
+}
+
+export type Assembly2DLike = Shape2DLike;
+
+export interface SketchLike {
+  getNode(): SketchNode;
+  onLayer(layer: string): SketchLike;
+  tag(...tags: string[]): SketchLike;
+}
+
+export interface CadRuntime {
+  rect(width: number, height: number): Shape2DLike;
+  circle(radius: number): Shape2DLike;
+  roundRect(width: number, height: number, radius: number): Shape2DLike;
+  polyline(
+    points: readonly Point2D[],
+    options?: { closed?: boolean }
+  ): Shape2DLike;
+  assembly(
+    children: Record<string, Shape2DLike | Assembly2DLike>
+  ): Assembly2DLike;
+  sketch(children: Record<string, Shape2DLike | Assembly2DLike>): SketchLike;
+  compileToMaker(value: Shape2DLike | Assembly2DLike | SketchLike): IModel;
+}
