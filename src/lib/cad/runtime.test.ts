@@ -2,6 +2,11 @@ import makerjs from 'makerjs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_EDITOR_CODE } from '@/store/store';
 import {
+  CAD_SNIPPETS,
+  DEFAULT_EDITOR_SNIPPET_ID,
+  type CadSnippetId,
+} from '@/lib/cad/snippets';
+import {
   Assembly2D,
   cad,
   isMakerModelLike,
@@ -67,7 +72,7 @@ describe('normalizeEditorModelResult', () => {
     ]);
   });
 
-  it('supports default busy-board editor example', () => {
+  it('supports the default editor scene example', () => {
     const createModel = new Function(
       'makerjs',
       'cad',
@@ -87,6 +92,38 @@ describe('normalizeEditorModelResult', () => {
     ]);
   });
 
+  it('evaluates every cad snippet and the default editor scene without parameters', () => {
+    const snippetIds: CadSnippetId[] = Array.from(
+      new Set<CadSnippetId>([
+        ...(Object.keys(CAD_SNIPPETS) as CadSnippetId[]),
+        DEFAULT_EDITOR_SNIPPET_ID,
+      ])
+    );
+
+    snippetIds.forEach((snippetId) => {
+      const createModel = new Function(
+        'makerjs',
+        'cad',
+        `return (function () {
+          ${CAD_SNIPPETS[snippetId].code}
+        })();`
+      );
+      const evaluated = createModel(makerjs, cad);
+      const model = normalizeEditorModelResult(evaluated);
+      const extents = makerjs.measure.modelExtents(model);
+      const renderableEntitiesCount =
+        Object.keys(model.models ?? {}).length +
+        Object.keys(model.paths ?? {}).length;
+
+      expect(renderableEntitiesCount).toBeGreaterThan(0);
+      expect(extents).not.toBeNull();
+      expect(Number.isFinite(extents!.width)).toBe(true);
+      expect(Number.isFinite(extents!.height)).toBe(true);
+      expect(extents!.width).toBeGreaterThan(0);
+      expect(extents!.height).toBeGreaterThan(0);
+    });
+  });
+
   it('throws for non-model values', () => {
     expect(() => normalizeEditorModelResult('not-a-model')).toThrow(
       /must return a Maker\.js model/
@@ -95,6 +132,196 @@ describe('normalizeEditorModelResult', () => {
 });
 
 describe('cad shape helpers', () => {
+  it('keeps legacy panel behavior when edges are not provided', () => {
+    const panel = normalizeEditorModelResult(
+      cad.panel({
+        width: 100,
+        height: 70,
+        radius: 10,
+        inset: { margin: 12, radius: 6 },
+        holes: [{ kind: 'circle', x: 50, y: 35, radius: 5 }],
+      })
+    );
+    const extents = makerjs.measure.modelExtents(panel)!;
+
+    expect(extents.low[0]).toBeCloseTo(0, 6);
+    expect(extents.low[1]).toBeCloseTo(0, 6);
+    expect(extents.high[0]).toBeCloseTo(100, 6);
+    expect(extents.high[1]).toBeCloseTo(70, 6);
+  });
+
+  it('expands panel bounds when edge tabs are applied', () => {
+    const panel = normalizeEditorModelResult(
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 3,
+        edges: {
+          left: { kind: 'tabs', count: 2, segmentLength: 16 },
+          right: { kind: 'tabs', count: 2, segmentLength: 16 },
+        },
+      })
+    );
+    const extents = makerjs.measure.modelExtents(panel)!;
+
+    expect(extents.low[0]).toBeCloseTo(-3, 6);
+    expect(extents.high[0]).toBeCloseTo(103, 6);
+    expect(extents.low[1]).toBeCloseTo(0, 6);
+    expect(extents.high[1]).toBeCloseTo(60, 6);
+  });
+
+  it('cuts edge notches from the outer panel boundary', () => {
+    const panel = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        edges: {
+          top: { kind: 'notches', count: 2, segmentLength: 20 },
+        },
+      })
+    );
+    const extents = makerjs.measure.modelExtents(panel)!;
+
+    expect(extents.low[0]).toBeCloseTo(0, 6);
+    expect(extents.low[1]).toBeCloseTo(0, 6);
+    expect(extents.high[0]).toBeCloseTo(120, 6);
+    expect(extents.high[1]).toBeCloseTo(70, 6);
+    expect(makerjs.measure.isPointInsideModel([36.67, 1], panel)).toBe(false);
+    expect(makerjs.measure.isPointInsideModel([36.67, 4], panel)).toBe(true);
+  });
+
+  it('builds profiled panel bodies from a single normalized outer contour', () => {
+    const panelNode = cad
+      .panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        clearance: 0.2,
+        edges: {
+          top: { kind: 'notches', count: 2, segmentLength: 20 },
+          right: { kind: 'tabs', count: 2, segmentLength: 16 },
+          bottom: { kind: 'notches', count: 2, segmentLength: 20 },
+          left: { kind: 'tabs', count: 2, segmentLength: 16 },
+        },
+      })
+      .getNode();
+
+    expect(panelNode.kind).toBe('assembly');
+
+    if (panelNode.kind !== 'assembly') {
+      throw new Error('Expected an assembly panel');
+    }
+
+    const bodyNode = panelNode.children.body;
+
+    expect(bodyNode.kind).toBe('polyline');
+
+    if (bodyNode.kind !== 'polyline') {
+      throw new Error('Expected a polyline body');
+    }
+
+    expect(bodyNode.closed).toBe(true);
+    expect(hasConsecutiveDuplicatePoints(bodyNode.points)).toBe(false);
+    expect(hasRedundantCollinearPoints(bodyNode.points)).toBe(false);
+  });
+
+  it('keeps panel holes as boolean cuts on top of the outer contour', () => {
+    const panelNode = cad
+      .panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        edges: {
+          left: { kind: 'tabs', count: 2, segmentLength: 16 },
+          right: { kind: 'tabs', count: 2, segmentLength: 16 },
+        },
+        holes: [{ kind: 'circle', x: 60, y: 35, radius: 8 }],
+      })
+      .getNode();
+
+    expect(panelNode.kind).toBe('assembly');
+
+    if (panelNode.kind !== 'assembly') {
+      throw new Error('Expected an assembly panel');
+    }
+
+    const bodyNode = panelNode.children.body;
+
+    expect(bodyNode.kind).toBe('boolean');
+
+    if (bodyNode.kind !== 'boolean') {
+      throw new Error('Expected a boolean body');
+    }
+
+    expect(bodyNode.operation).toBe('cut');
+    expect(bodyNode.left.kind).toBe('polyline');
+  });
+
+  it('uses clearance to enlarge notch openings', () => {
+    const withoutClearance = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        edges: {
+          top: { kind: 'notches', count: 2, segmentLength: 20 },
+        },
+      })
+    );
+    const withClearance = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        clearance: 0.25,
+        edges: {
+          top: { kind: 'notches', count: 2, segmentLength: 20 },
+        },
+      })
+    );
+
+    expect(
+      makerjs.measure.isPointInsideModel([46.74, 1.5], withoutClearance)
+    ).toBe(true);
+    expect(
+      makerjs.measure.isPointInsideModel([46.74, 1.5], withClearance)
+    ).toBe(false);
+  });
+
+  it('exports profiled panels to DXF without invalid numeric output', () => {
+    const model = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 3,
+        edges: {
+          top: { kind: 'notches', count: 2, segmentLength: 20 },
+          left: { kind: 'tabs', count: 2, segmentLength: 16 },
+        },
+      })
+    );
+    const dxf = makerjs.exporter.toDXF(model);
+
+    expect(dxf).toContain('ENTITIES');
+    expect(dxf).not.toContain('NaN');
+    expect(dxf).not.toContain('undefined');
+  });
+
+  it('rejects rounded panels when profiled edges are requested', () => {
+    expect(() =>
+      cad.panel({
+        width: 120,
+        height: 70,
+        radius: 12,
+        thickness: 3,
+        edges: {
+          top: { kind: 'tabs', count: 2, segmentLength: 18 },
+        },
+      })
+    ).toThrow(/do not support radius/);
+  });
+
   it('supports booleans, anchors, and alignment helpers', () => {
     const base = cad.rect(100, 80);
     const windowCut = cad.rect(40, 20).centerAt([50, 40]);
@@ -124,6 +351,67 @@ describe('cad shape helpers', () => {
     expect(Object.keys(model.models ?? {}).sort()).toEqual(['grid', 'ticks']);
     expect(Object.keys(model.models?.ticks?.models ?? {}).length).toBe(6);
     expect(Object.keys(model.models?.grid?.models ?? {}).length).toBe(4);
+  });
+
+  it('lays out parts row-by-row with stable ids and expected gaps', () => {
+    const sketch = cad.flatLayout(
+      {
+        first: cad.rect(30, 10),
+        second: cad.rect(20, 16),
+        third: cad.rect(18, 12),
+      },
+      { columns: 2, gapX: 10, gapY: 14 }
+    );
+    const model = normalizeEditorModelResult(sketch);
+
+    expect(Object.keys(model.models ?? {}).sort()).toEqual([
+      'first',
+      'second',
+      'third',
+    ]);
+
+    const first = getTopLevelModelExtents(model, 'first');
+    const second = getTopLevelModelExtents(model, 'second');
+    const third = getTopLevelModelExtents(model, 'third');
+
+    expect(second.low[0] - first.high[0]).toBeCloseTo(10, 6);
+    expect(third.low[1] - Math.max(first.high[1], second.high[1])).toBeCloseTo(
+      14,
+      6
+    );
+  });
+
+  it('uses assembly placement bounds for flat layout', () => {
+    const decorated = new Assembly2D({
+      kind: 'assembly',
+      children: {
+        body: cad.rect(24, 12).getNode(),
+        guide: cad
+          .circle(6)
+          .moveTo([80, 6], 'center')
+          .onLayer('etch')
+          .getNode(),
+      },
+      placementChildId: 'body',
+      metadata: {},
+    });
+
+    const sketch = cad.flatLayout(
+      {
+        base: cad.rect(30, 10),
+        decorated,
+      },
+      { columns: 2, gapX: 10, gapY: 12 }
+    );
+    const model = normalizeEditorModelResult(sketch);
+    const decoratedBody = getNestedChildModelExtents(
+      model,
+      'decorated',
+      'body'
+    );
+
+    expect(decoratedBody.low[0]).toBeCloseTo(40, 6);
+    expect(decoratedBody.low[1]).toBeCloseTo(0, 6);
   });
 
   it('centers decorated assemblies by their placement body', () => {
@@ -238,3 +526,82 @@ const getChildModelCenter = (
 
   return [extents.center[0], extents.center[1]];
 };
+
+const getTopLevelModelExtents = (
+  parentModel: makerjs.IModel,
+  childId: string
+): makerjs.IMeasureWithCenter => getChildModelExtents(parentModel, childId);
+
+const getNestedChildModelExtents = (
+  parentModel: makerjs.IModel,
+  parentChildId: string,
+  nestedChildId: string
+): makerjs.IMeasureWithCenter => {
+  const parentChildModel = parentModel.models?.[parentChildId];
+
+  if (!parentChildModel) {
+    throw new Error(`Missing child model: ${parentChildId}`);
+  }
+
+  const nestedChildModel = parentChildModel.models?.[nestedChildId];
+
+  if (!nestedChildModel) {
+    throw new Error(
+      `Missing nested child model: ${parentChildId}.${nestedChildId}`
+    );
+  }
+
+  const extents = makerjs.measure.modelExtents(nestedChildModel)!;
+  const parentOrigin = parentChildModel.origin ?? [0, 0];
+  const rootOrigin = parentModel.origin ?? [0, 0];
+
+  return {
+    ...extents,
+    low: [
+      extents.low[0] + parentOrigin[0] + rootOrigin[0],
+      extents.low[1] + parentOrigin[1] + rootOrigin[1],
+    ],
+    high: [
+      extents.high[0] + parentOrigin[0] + rootOrigin[0],
+      extents.high[1] + parentOrigin[1] + rootOrigin[1],
+    ],
+    center: [
+      extents.center[0] + parentOrigin[0] + rootOrigin[0],
+      extents.center[1] + parentOrigin[1] + rootOrigin[1],
+    ],
+  };
+};
+
+const PANEL_TEST_EPSILON = 1e-9;
+
+const hasConsecutiveDuplicatePoints = (
+  points: readonly (readonly [number, number])[]
+): boolean =>
+  points.some((point, index) => {
+    const next = points[(index + 1) % points.length];
+
+    return (
+      Math.abs(point[0] - next[0]) <= PANEL_TEST_EPSILON &&
+      Math.abs(point[1] - next[1]) <= PANEL_TEST_EPSILON
+    );
+  });
+
+const hasRedundantCollinearPoints = (
+  points: readonly (readonly [number, number])[]
+): boolean =>
+  points.some((current, index) => {
+    const previous = points[(index - 1 + points.length) % points.length];
+    const next = points[(index + 1) % points.length];
+    const vectorA: readonly [number, number] = [
+      current[0] - previous[0],
+      current[1] - previous[1],
+    ];
+    const vectorB: readonly [number, number] = [
+      next[0] - current[0],
+      next[1] - current[1],
+    ];
+    const cross = vectorA[0] * vectorB[1] - vectorA[1] * vectorB[0];
+    const dot = vectorA[0] * vectorB[0] + vectorA[1] * vectorB[1];
+
+    return Math.abs(cross) <= PANEL_TEST_EPSILON && dot > PANEL_TEST_EPSILON;
+  });

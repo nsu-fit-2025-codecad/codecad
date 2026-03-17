@@ -5,6 +5,11 @@ import {
   configureCadEditor,
   resetCadEditorEnhancementsForTest,
 } from '@/lib/cad/editor';
+import {
+  CAD_SNIPPETS,
+  getCadSnippetEditorCode,
+  type CadSnippetId,
+} from '@/lib/cad/snippets';
 
 const createMonacoStub = () => {
   const addExtraLib = vi.fn(() => ({
@@ -62,6 +67,19 @@ describe('configureCadEditor', () => {
       expect.any(String)
     );
     expect(CAD_EDITOR_EXTRA_LIB).toContain('declare const makerjs: any;');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      "type PanelEdgeKind = 'plain' | 'tabs' | 'notches';"
+    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('interface PanelOptions {');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('interface FlatLayoutOptions {');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('panel(options: {');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      "kind: 'plain' | 'tabs' | 'notches';"
+    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('flatLayout(');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      'parts: { [id: string]: CadEntity },'
+    );
   });
 
   it('registers cad factory, method, and snippet completions', () => {
@@ -95,6 +113,7 @@ describe('configureCadEditor', () => {
       expect.arrayContaining([
         'rect',
         'panel',
+        'flatLayout',
         'gear',
         'clockFace',
         'trackPath',
@@ -122,5 +141,32 @@ describe('configureCadEditor', () => {
     expect(
       monaco.languages.registerCompletionItemProvider
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses shared snippet registry entries for editor snippets', () => {
+    CAD_EDITOR_SNIPPETS.forEach((snippetDefinition) => {
+      expect(snippetDefinition.snippetId).toBeDefined();
+      expect(snippetDefinition.insertText).toBe(
+        getCadSnippetEditorCode(snippetDefinition.snippetId!)
+      );
+    });
+  });
+
+  it('keeps helper completion snippets paste-safe for existing editor buffers', () => {
+    const inlineHelperSnippetIds: CadSnippetId[] = [
+      'helperPanel',
+      'helperGear',
+      'helperClockFace',
+      'primitiveTrackPath',
+    ];
+
+    inlineHelperSnippetIds.forEach((snippetId) => {
+      expect(getCadSnippetEditorCode(snippetId)).not.toContain(
+        'return cad.sketch'
+      );
+      expect(getCadSnippetEditorCode(snippetId)).not.toBe(
+        CAD_SNIPPETS[snippetId].code
+      );
+    });
   });
 });
