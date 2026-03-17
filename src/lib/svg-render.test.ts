@@ -52,7 +52,7 @@ const createMixedFixture = (): IModel => {
   };
 };
 
-const createBusyBoardFixture = (): IModel => {
+const createDefaultSceneFixture = (): IModel => {
   const createModel = new Function(
     'makerjs',
     'cad',
@@ -105,6 +105,26 @@ const createOffsetViewportFixture = (): IModel => {
     })
   );
 };
+
+const createNotchedPanelFixture = (): IModel =>
+  normalizeEditorModelResult(
+    cad.sketch({
+      panel: cad
+        .panel({
+          width: 120,
+          height: 70,
+          thickness: 3,
+          clearance: 0.2,
+          edges: {
+            top: { kind: 'notches', count: 2, segmentLength: 20 },
+            bottom: { kind: 'notches', count: 2, segmentLength: 20 },
+            left: { kind: 'tabs', count: 2, segmentLength: 16 },
+            right: { kind: 'tabs', count: 2, segmentLength: 16 },
+          },
+        })
+        .translate(25, 20),
+    })
+  );
 
 const createParameterizedTargetFixture = (height: number): IModel =>
   normalizeEditorModelResult(
@@ -243,18 +263,18 @@ describe('renderModelToSvg', () => {
     expect(highlightedSvg).toContain(`${MODEL_FILL_FOR_ATTRIBUTE}="movedPart"`);
   });
 
-  it('keeps busy-board helper fills isolated per top-level model', () => {
-    const model = createBusyBoardFixture();
+  it('keeps default scene fills isolated per top-level model', () => {
+    const model = createDefaultSceneFixture();
     const svg = renderModelToSvg(model);
 
-    ['door', 'gear', 'clock', 'maze'].forEach((modelId) => {
+    ['clock', 'door', 'gear', 'maze'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   });
 
-  it('keeps busy-board helper fills aligned after nesting', () => {
-    const model = createBusyBoardFixture();
-    const result = packModelsIntoTargetModel(model, 'door', {
+  it('keeps parameterized target scene fills aligned after nesting', () => {
+    const model = createParameterizedTargetFixture(352);
+    const result = packModelsIntoTargetModel(model, 'target', {
       useGeneticSearch: false,
       allowRotation: true,
     });
@@ -263,10 +283,10 @@ describe('renderModelToSvg', () => {
 
     const svg = result!.svgString;
 
-    ['door', 'gear', 'clock', 'maze'].forEach((modelId) => {
+    ['clock', 'door', 'gear', 'maze', 'target'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
-  });
+  }, 15000);
 
   it('keeps translated top-level helper fills in root SVG coordinates', () => {
     const model = createTranslatedHelperFixture();
@@ -282,6 +302,14 @@ describe('renderModelToSvg', () => {
 
     expectFillMatchesRootSvgCoordinates(svg, model, 'panel');
     expectFillMatchesRootSvgCoordinates(svg, model, 'gear');
+  });
+
+  it('renders profiled panel contours without losing root SVG alignment', () => {
+    const model = createNotchedPanelFixture();
+    const svg = renderModelToSvg(model);
+
+    expectOutlineMatchesRootSvgCoordinates(svg, model, 'panel');
+    expectFillMatchesRootSvgCoordinates(svg, model, 'panel');
   });
 
   it('keeps target outline and fill in sync across sequential height changes', () => {

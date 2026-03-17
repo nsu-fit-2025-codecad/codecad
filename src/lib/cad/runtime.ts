@@ -9,11 +9,14 @@ import type {
   CircleHoleSpec,
   ClockFaceOptions,
   EntityNode,
+  FlatLayoutOptions,
   GearOptions,
   MakerModelNode,
   MirrorAxis,
   NodeMetadata,
   PanelInsetOptions,
+  PanelEdgeOptions,
+  PanelEdgesOptions,
   PanelOptions,
   Point2D,
   PolarArrayOptions,
@@ -398,6 +401,422 @@ const buildPanelInset = (
     insetShape
       .translate(inset.margin, inset.margin)
       .onLayer(DEFAULT_ETCH_LAYER)
+      .getNode()
+  );
+};
+
+const getPanelEdgeLength = (
+  edge: keyof PanelEdgesOptions,
+  width: number,
+  height: number
+): number => (edge === 'top' || edge === 'bottom' ? width : height);
+
+const resolvePanelEdgeDepth = (
+  edge: PanelEdgeOptions,
+  thickness: number | undefined
+): number => {
+  if (edge.depth !== undefined) {
+    assertPositiveNumber(edge.depth, 'panel edge depth');
+    return edge.depth;
+  }
+
+  if (thickness === undefined) {
+    throw new Error(
+      'panel thickness must be provided when panel edge depth is omitted'
+    );
+  }
+
+  assertPositiveNumber(thickness, 'thickness');
+
+  return thickness;
+};
+
+const validatePanelEdges = (
+  width: number,
+  height: number,
+  radius: number,
+  edges: PanelEdgesOptions | undefined,
+  thickness: number | undefined,
+  clearance: number
+): void => {
+  assertNonNegativeNumber(clearance, 'clearance');
+
+  if (!edges) {
+    if (thickness !== undefined) {
+      assertPositiveNumber(thickness, 'thickness');
+    }
+
+    return;
+  }
+
+  const hasProfiledEdge = Object.values(edges).some(
+    (edge) => edge && edge.kind !== 'plain'
+  );
+
+  if (!hasProfiledEdge) {
+    if (thickness !== undefined) {
+      assertPositiveNumber(thickness, 'thickness');
+    }
+
+    return;
+  }
+
+  if (radius > 0) {
+    throw new Error('panel edges with tabs or notches do not support radius');
+  }
+
+  Object.entries(edges).forEach(([edgeName, edgeOptions]) => {
+    if (!edgeOptions || edgeOptions.kind === 'plain') {
+      return;
+    }
+
+    assertPositiveInteger(edgeOptions.count, `${edgeName}.count`);
+    assertPositiveNumber(
+      edgeOptions.segmentLength,
+      `${edgeName}.segmentLength`
+    );
+
+    const inset = edgeOptions.inset ?? 0;
+    assertNonNegativeNumber(inset, `${edgeName}.inset`);
+
+    const depth = resolvePanelEdgeDepth(edgeOptions, thickness);
+    const edgeLength = getPanelEdgeLength(
+      edgeName as keyof PanelEdgesOptions,
+      width,
+      height
+    );
+    const availableLength = edgeLength - inset * 2;
+    const gap =
+      (availableLength - edgeOptions.count * edgeOptions.segmentLength) /
+      (edgeOptions.count + 1);
+
+    if (availableLength <= 0) {
+      throw new Error(`${edgeName} inset leaves no usable edge length`);
+    }
+
+    if (edgeOptions.count * edgeOptions.segmentLength > availableLength) {
+      throw new Error(
+        `${edgeName} edge profile does not fit on the panel side`
+      );
+    }
+
+    if (depth <= 0) {
+      throw new Error(`${edgeName} edge depth must be greater than 0`);
+    }
+
+    if (edgeOptions.kind === 'notches' && gap < clearance) {
+      throw new Error(
+        `${edgeName} clearance is too large for the selected notch spacing`
+      );
+    }
+  });
+};
+
+const distributeEdgeSegments = (
+  edgeLength: number,
+  count: number,
+  segmentLength: number,
+  inset: number
+): number[] => {
+  const availableLength = edgeLength - inset * 2;
+  const gap = (availableLength - count * segmentLength) / (count + 1);
+
+  return Array.from({ length: count }, (_, index) => {
+    return inset + gap * (index + 1) + segmentLength * index;
+  });
+};
+
+type PanelEdgeName = keyof PanelEdgesOptions;
+
+interface ResolvedPanelEdgeProfile {
+  readonly kind: PanelEdgeOptions['kind'];
+  readonly depth: number;
+  readonly segments: ReadonlyArray<{
+    readonly start: number;
+    readonly end: number;
+  }>;
+}
+
+const PANEL_CONTOUR_EPSILON = 1e-9;
+
+const arePointsEqual = (left: Point2D, right: Point2D): boolean =>
+  Math.abs(left[0] - right[0]) <= PANEL_CONTOUR_EPSILON &&
+  Math.abs(left[1] - right[1]) <= PANEL_CONTOUR_EPSILON;
+
+const shouldCollapseCollinearPoint = (
+  previous: Point2D,
+  current: Point2D,
+  next: Point2D
+): boolean => {
+  const vectorA: Point2D = [current[0] - previous[0], current[1] - previous[1]];
+  const vectorB: Point2D = [next[0] - current[0], next[1] - current[1]];
+  const cross = vectorA[0] * vectorB[1] - vectorA[1] * vectorB[0];
+  const dot = vectorA[0] * vectorB[0] + vectorA[1] * vectorB[1];
+
+  return (
+    Math.abs(cross) <= PANEL_CONTOUR_EPSILON && dot > PANEL_CONTOUR_EPSILON
+  );
+};
+
+const normalizeClosedContourPoints = (
+  points: readonly Point2D[]
+): readonly Point2D[] => {
+  const normalized = [...points];
+
+  while (
+    normalized.length > 1 &&
+    arePointsEqual(normalized[0], normalized[normalized.length - 1])
+  ) {
+    normalized.pop();
+  }
+
+  let changed = true;
+
+  while (changed && normalized.length > 2) {
+    changed = false;
+
+    for (let index = 0; index < normalized.length; index += 1) {
+      const previousIndex = (index - 1 + normalized.length) % normalized.length;
+      const nextIndex = (index + 1) % normalized.length;
+      const previous = normalized[previousIndex];
+      const current = normalized[index];
+      const next = normalized[nextIndex];
+
+      if (arePointsEqual(previous, current)) {
+        normalized.splice(index, 1);
+        changed = true;
+        break;
+      }
+
+      if (shouldCollapseCollinearPoint(previous, current, next)) {
+        normalized.splice(index, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return normalized;
+};
+
+const appendContourPoint = (points: Point2D[], point: Point2D): void => {
+  if (points.length === 0) {
+    points.push(point);
+    return;
+  }
+
+  if (arePointsEqual(points[points.length - 1], point)) {
+    return;
+  }
+
+  points.push(point);
+};
+
+const resolvePanelEdgeProfile = (
+  edgeName: PanelEdgeName,
+  width: number,
+  height: number,
+  edges: PanelEdgesOptions | undefined,
+  thickness: number | undefined,
+  clearance: number
+): ResolvedPanelEdgeProfile | null => {
+  const edgeOptions = edges?.[edgeName];
+
+  if (!edgeOptions || edgeOptions.kind === 'plain') {
+    return null;
+  }
+
+  const edgeLength = getPanelEdgeLength(edgeName, width, height);
+  const inset = edgeOptions.inset ?? 0;
+  const baseDepth = resolvePanelEdgeDepth(edgeOptions, thickness);
+  const segmentStarts = distributeEdgeSegments(
+    edgeLength,
+    edgeOptions.count,
+    edgeOptions.segmentLength,
+    inset
+  );
+
+  if (edgeOptions.kind === 'tabs') {
+    return {
+      kind: 'tabs',
+      depth: baseDepth,
+      segments: segmentStarts.map((start) => ({
+        start,
+        end: start + edgeOptions.segmentLength,
+      })),
+    };
+  }
+
+  return {
+    kind: 'notches',
+    depth: baseDepth + clearance,
+    segments: segmentStarts.map((start) => ({
+      start: start - clearance / 2,
+      end: start + edgeOptions.segmentLength + clearance / 2,
+    })),
+  };
+};
+
+const appendTopEdgeProfile = (
+  points: Point2D[],
+  width: number,
+  profile: ResolvedPanelEdgeProfile | null
+): void => {
+  if (!profile) {
+    appendContourPoint(points, [width, 0]);
+    return;
+  }
+
+  let cursor = 0;
+  const offset = profile.kind === 'tabs' ? -profile.depth : profile.depth;
+
+  profile.segments.forEach((segment) => {
+    appendContourPoint(points, [segment.start, 0]);
+    appendContourPoint(points, [segment.start, offset]);
+    appendContourPoint(points, [segment.end, offset]);
+    appendContourPoint(points, [segment.end, 0]);
+    cursor = segment.end;
+  });
+
+  if (cursor < width) {
+    appendContourPoint(points, [width, 0]);
+  }
+};
+
+const appendRightEdgeProfile = (
+  points: Point2D[],
+  height: number,
+  profile: ResolvedPanelEdgeProfile | null,
+  width: number
+): void => {
+  if (!profile) {
+    appendContourPoint(points, [width, height]);
+    return;
+  }
+
+  let cursor = 0;
+  const offset =
+    profile.kind === 'tabs' ? width + profile.depth : width - profile.depth;
+
+  profile.segments.forEach((segment) => {
+    appendContourPoint(points, [width, segment.start]);
+    appendContourPoint(points, [offset, segment.start]);
+    appendContourPoint(points, [offset, segment.end]);
+    appendContourPoint(points, [width, segment.end]);
+    cursor = segment.end;
+  });
+
+  if (cursor < height) {
+    appendContourPoint(points, [width, height]);
+  }
+};
+
+const appendBottomEdgeProfile = (
+  points: Point2D[],
+  width: number,
+  height: number,
+  profile: ResolvedPanelEdgeProfile | null
+): void => {
+  if (!profile) {
+    appendContourPoint(points, [0, height]);
+    return;
+  }
+
+  let cursor = width;
+  const offset =
+    profile.kind === 'tabs' ? height + profile.depth : height - profile.depth;
+
+  [...profile.segments].reverse().forEach((segment) => {
+    appendContourPoint(points, [segment.end, height]);
+    appendContourPoint(points, [segment.end, offset]);
+    appendContourPoint(points, [segment.start, offset]);
+    appendContourPoint(points, [segment.start, height]);
+    cursor = segment.start;
+  });
+
+  if (cursor > 0) {
+    appendContourPoint(points, [0, height]);
+  }
+};
+
+const appendLeftEdgeProfile = (
+  points: Point2D[],
+  height: number,
+  profile: ResolvedPanelEdgeProfile | null
+): void => {
+  if (!profile) {
+    appendContourPoint(points, [0, 0]);
+    return;
+  }
+
+  let cursor = height;
+  const offset = profile.kind === 'tabs' ? -profile.depth : profile.depth;
+
+  [...profile.segments].reverse().forEach((segment) => {
+    appendContourPoint(points, [0, segment.end]);
+    appendContourPoint(points, [offset, segment.end]);
+    appendContourPoint(points, [offset, segment.start]);
+    appendContourPoint(points, [0, segment.start]);
+    cursor = segment.start;
+  });
+
+  if (cursor > 0) {
+    appendContourPoint(points, [0, 0]);
+  }
+};
+
+const buildPanelEdgeContour = (
+  width: number,
+  height: number,
+  edges: PanelEdgesOptions | undefined,
+  thickness: number | undefined,
+  clearance: number
+): Shape2D => {
+  const top = resolvePanelEdgeProfile(
+    'top',
+    width,
+    height,
+    edges,
+    thickness,
+    clearance
+  );
+  const right = resolvePanelEdgeProfile(
+    'right',
+    width,
+    height,
+    edges,
+    thickness,
+    clearance
+  );
+  const bottom = resolvePanelEdgeProfile(
+    'bottom',
+    width,
+    height,
+    edges,
+    thickness,
+    clearance
+  );
+  const left = resolvePanelEdgeProfile(
+    'left',
+    width,
+    height,
+    edges,
+    thickness,
+    clearance
+  );
+  const contourPoints: Point2D[] = [];
+
+  appendContourPoint(contourPoints, [0, 0]);
+  appendTopEdgeProfile(contourPoints, width, top);
+  appendRightEdgeProfile(contourPoints, height, right, width);
+  appendBottomEdgeProfile(contourPoints, width, height, bottom);
+  appendLeftEdgeProfile(contourPoints, height, left);
+
+  return asShape(
+    cad
+      .polyline(normalizeClosedContourPoints(contourPoints), {
+        closed: true,
+      })
       .getNode()
   );
 };
@@ -852,8 +1271,30 @@ const internalNumber = (value: number): number =>
 
 const buildPanel = (options: PanelOptions): Assembly2D => {
   const radius = options.radius ?? 0;
-  const bodyBase = createOuterRect(options.width, options.height, radius);
+  const clearance = options.clearance ?? 0;
+  const hasEdgeProfiles = Object.values(options.edges ?? {}).some(
+    (edge) => edge && edge.kind !== 'plain'
+  );
 
+  validatePanelEdges(
+    options.width,
+    options.height,
+    radius,
+    options.edges,
+    options.thickness,
+    clearance
+  );
+
+  const bodyBase =
+    hasEdgeProfiles && radius === 0
+      ? buildPanelEdgeContour(
+          options.width,
+          options.height,
+          options.edges,
+          options.thickness,
+          clearance
+        )
+      : createOuterRect(options.width, options.height, radius);
   const body = (options.holes ?? []).reduce((current, hole) => {
     const cutout =
       hole.kind === 'circle'
@@ -1022,6 +1463,50 @@ const buildClockFace = (options: ClockFaceOptions): Assembly2D => {
   );
 };
 
+const buildFlatLayout = (
+  parts: Record<string, Shape2DLike | Assembly2DLike>,
+  options: FlatLayoutOptions
+): SketchLike => {
+  assertPositiveInteger(options.columns, 'columns');
+  assertNonNegativeNumber(options.gapX, 'gapX');
+  assertNonNegativeNumber(options.gapY, 'gapY');
+
+  const entries = Object.entries(parts);
+
+  if (entries.length === 0) {
+    throw new Error('flatLayout requires at least one part');
+  }
+
+  const laidOutParts: Record<string, Shape2DLike | Assembly2DLike> = {};
+  let cursorX = 0;
+  let cursorY = 0;
+  let currentRowHeight = 0;
+
+  entries.forEach(([childId, child], index) => {
+    validateChildId(childId);
+
+    if (index > 0 && index % options.columns === 0) {
+      cursorX = 0;
+      cursorY += currentRowHeight + options.gapY;
+      currentRowHeight = 0;
+    }
+
+    const bounds = getPlacementBounds(child.getNode());
+    const width = bounds.maxX - bounds.minX;
+    const height = bounds.maxY - bounds.minY;
+    const translatedChild = child.translate(
+      cursorX - bounds.minX,
+      cursorY - bounds.minY
+    );
+
+    laidOutParts[childId] = translatedChild;
+    cursorX += width + options.gapX;
+    currentRowHeight = Math.max(currentRowHeight, height);
+  });
+
+  return cad.sketch(laidOutParts);
+};
+
 export const cad: CadRuntime & {
   assembly(children: Record<string, Shape2DLike | Assembly2DLike>): Assembly2D;
   sketch(children: Record<string, Shape2DLike | Assembly2DLike>): Sketch;
@@ -1171,6 +1656,13 @@ export const cad: CadRuntime & {
     });
 
     return asShape(createModelNode(model));
+  },
+
+  flatLayout(
+    parts: Record<string, Shape2DLike | Assembly2DLike>,
+    options: FlatLayoutOptions
+  ) {
+    return buildFlatLayout(parts, options);
   },
 
   assembly(children: Record<string, Shape2DLike | Assembly2DLike>) {

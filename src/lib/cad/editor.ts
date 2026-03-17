@@ -1,3 +1,5 @@
+import { getCadSnippetEditorCode, type CadSnippetId } from '@/lib/cad/snippets';
+
 const CAD_EDITOR_EXTRA_LIB_PATH = 'ts:cad-runtime-globals.d.ts';
 
 interface CompletionDefinition {
@@ -6,6 +8,7 @@ interface CompletionDefinition {
   documentation: string;
   insertText: string;
   kind: 'function' | 'method' | 'snippet';
+  snippetId?: CadSnippetId;
 }
 
 interface DisposableLike {
@@ -92,6 +95,55 @@ type Anchor2D =
   | 'bottom'
   | 'bottomLeft'
   | 'left';
+type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
+
+interface PanelEdgeOptions {
+  kind: PanelEdgeKind;
+  count: number;
+  segmentLength: number;
+  depth?: number;
+  inset?: number;
+}
+
+interface PanelEdgesOptions {
+  top?: PanelEdgeOptions;
+  right?: PanelEdgeOptions;
+  bottom?: PanelEdgeOptions;
+  left?: PanelEdgeOptions;
+}
+
+interface PanelInsetOptions {
+  margin: number;
+  radius?: number;
+}
+
+type PanelHoleSpec =
+  | { kind: 'circle'; x: number; y: number; radius: number }
+  | {
+      kind: 'slot';
+      x: number;
+      y: number;
+      length: number;
+      width: number;
+      angleDeg?: number;
+    };
+
+interface PanelOptions {
+  width: number;
+  height: number;
+  radius?: number;
+  inset?: PanelInsetOptions;
+  thickness?: number;
+  clearance?: number;
+  edges?: PanelEdgesOptions;
+  holes?: readonly PanelHoleSpec[];
+}
+
+interface FlatLayoutOptions {
+  columns: number;
+  gapX: number;
+  gapY: number;
+}
 
 interface CadEntity {
   translate(x: number, y: number): CadEntity;
@@ -130,10 +182,57 @@ interface CadRuntime {
     width: number;
     height: number;
     radius?: number;
-    inset?: { margin: number; radius?: number };
+    inset?: {
+      margin: number;
+      radius?: number;
+    };
+    thickness?: number;
+    clearance?: number;
+    edges?: {
+      top?: {
+        kind: 'plain' | 'tabs' | 'notches';
+        count: number;
+        segmentLength: number;
+        depth?: number;
+        inset?: number;
+      };
+      right?: {
+        kind: 'plain' | 'tabs' | 'notches';
+        count: number;
+        segmentLength: number;
+        depth?: number;
+        inset?: number;
+      };
+      bottom?: {
+        kind: 'plain' | 'tabs' | 'notches';
+        count: number;
+        segmentLength: number;
+        depth?: number;
+        inset?: number;
+      };
+      left?: {
+        kind: 'plain' | 'tabs' | 'notches';
+        count: number;
+        segmentLength: number;
+        depth?: number;
+        inset?: number;
+      };
+    };
     holes?: readonly Array<
-      | { kind: 'circle'; x: number; y: number; radius: number }
-      | { kind: 'slot'; x: number; y: number; length: number; width: number; angleDeg?: number }
+      | {
+          kind: 'circle';
+          x: number;
+          y: number;
+          radius: number;
+        }
+      | {
+          kind: 'slot';
+          x: number;
+          y: number;
+          length: number;
+          width: number;
+          angleDeg?: number;
+        }
     >;
   }): CadEntity;
   spokeWheel(options: {
@@ -162,6 +261,14 @@ interface CadRuntime {
     centerHole?: number;
   }): CadEntity;
   fromSvgPathData(pathData: string, options?: { bezierAccuracy?: number }): CadEntity;
+  flatLayout(
+    parts: { [id: string]: CadEntity },
+    options: {
+      columns: number;
+      gapX: number;
+      gapY: number;
+    }
+  ): CadEntity;
   assembly(children: Record<string, CadEntity>): CadEntity;
   sketch(children: Record<string, CadEntity>): CadEntity;
   compileToMaker(value: CadEntity): unknown;
@@ -175,21 +282,21 @@ const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
   {
     label: 'rect',
     detail: 'cad.rect(width, height)',
-    documentation: 'Create a rectangle from the top-left origin.',
+    documentation: 'Создаёт прямоугольник от локальной точки [0, 0].',
     insertText: 'rect(${1:width}, ${2:height})',
     kind: 'function',
   },
   {
     label: 'circle',
     detail: 'cad.circle(radius)',
-    documentation: 'Create a circle centered at the local origin.',
+    documentation: 'Создаёт круг с центром в локальной точке [0, 0].',
     insertText: 'circle(${1:radius})',
     kind: 'function',
   },
   {
     label: 'roundRect',
     detail: 'cad.roundRect(width, height, radius)',
-    documentation: 'Create a rounded rectangle.',
+    documentation: 'Создаёт скруглённый прямоугольник.',
     insertText: 'roundRect(${1:width}, ${2:height}, ${3:radius})',
     kind: 'function',
   },
@@ -197,16 +304,24 @@ const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
     label: 'panel',
     detail: 'cad.panel(options)',
     documentation:
-      'Create a laser-cut style panel with optional inset and holes.',
+      'Создаёт плоскую панель. Может включать отверстия и профили кромок.',
     insertText:
-      'panel({\n  width: ${1:120},\n  height: ${2:92},\n  radius: ${3:14},\n  inset: { margin: ${4:16}, radius: ${5:8} }\n})',
+      "panel({\n  width: ${1:120},\n  height: ${2:82},\n  thickness: ${3:3},\n  clearance: ${4:0.15},\n  edges: {\n    top: { kind: 'notches', count: ${5:2}, segmentLength: ${6:24} },\n    bottom: { kind: 'notches', count: ${7:2}, segmentLength: ${8:24} },\n    left: { kind: 'tabs', count: ${9:2}, segmentLength: ${10:18} },\n    right: { kind: 'tabs', count: ${11:2}, segmentLength: ${12:18} }\n  }\n})",
+    kind: 'function',
+  },
+  {
+    label: 'flatLayout',
+    detail: 'cad.flatLayout(parts, options)',
+    documentation: 'Раскладывает набор деталей в строки и столбцы.',
+    insertText:
+      'flatLayout({\n  ${1:front}: ${2:cad.panel({ width: 120, height: 80 })}\n}, { columns: ${3:2}, gapX: ${4:18}, gapY: ${5:18} })',
     kind: 'function',
   },
   {
     label: 'gear',
     detail: 'cad.gear(options)',
     documentation:
-      'Create a decorative gear outline with configurable tooth and valley widths.',
+      'Создаёт декоративную шестерню с настраиваемой шириной зуба и впадины.',
     insertText:
       'gear({\n  teeth: ${1:14},\n  outerRadius: ${2:34},\n  rootRadius: ${3:25},\n  bore: ${4:10}\n})',
     kind: 'function',
@@ -214,7 +329,8 @@ const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
   {
     label: 'clockFace',
     detail: 'cad.clockFace(options)',
-    documentation: 'Create a clock face body with etched rim and ticks.',
+    documentation:
+      'Создаёт циферблат с ободом, делениями и центральным отверстием.',
     insertText:
       'clockFace({\n  radius: ${1:42},\n  rimWidth: ${2:8},\n  tickCount: ${3:12},\n  centerHole: ${4:6}\n})',
     kind: 'function',
@@ -222,7 +338,7 @@ const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
   {
     label: 'trackPath',
     detail: 'cad.trackPath(points, width, options?)',
-    documentation: 'Create a wide track from a centerline path.',
+    documentation: 'Создаёт широкую дорожку по центральной линии.',
     insertText:
       'trackPath([\n  [${1:0}, ${2:0}],\n  [${3:60}, ${4:0}],\n  [${5:60}, ${6:30}]\n], ${7:10})',
     kind: 'function',
@@ -230,7 +346,8 @@ const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
   {
     label: 'sketch',
     detail: 'cad.sketch(children)',
-    documentation: 'Create the root document returned by editor code.',
+    documentation:
+      'Создаёт корневой sketch, который обычно возвращается из кода.',
     insertText: 'sketch({\n  ${1:part}: ${2:cad.rect(100, 60)}\n})',
     kind: 'function',
   },
@@ -241,14 +358,15 @@ const CAD_METHOD_COMPLETIONS: CompletionDefinition[] = [
     label: 'centerAt',
     detail: 'shape.centerAt([x, y])',
     documentation:
-      'Move the shape so its placement center lands at the target point.',
+      'Ставит фигуру так, чтобы её центр оказался в указанной точке.',
     insertText: 'centerAt([${1:x}, ${2:y}])',
     kind: 'method',
   },
   {
     label: 'moveTo',
     detail: "shape.moveTo([x, y], 'anchor')",
-    documentation: 'Move a specific anchor of the shape to a target point.',
+    documentation:
+      'Переносит выбранную опорную точку фигуры в указанное место.',
     insertText: "moveTo([${1:x}, ${2:y}], '${3:center}')",
     kind: 'method',
   },
@@ -256,35 +374,35 @@ const CAD_METHOD_COMPLETIONS: CompletionDefinition[] = [
     label: 'alignTo',
     detail: "shape.alignTo(target, 'fromAnchor', 'toAnchor')",
     documentation:
-      'Align one anchor on the current shape to another target anchor.',
+      'Выравнивает опорную точку текущей фигуры по опорной точке цели.',
     insertText: "alignTo(${1:target}, '${2:center}', '${3:center}')",
     kind: 'method',
   },
   {
     label: 'cut',
     detail: 'shape.cut(other)',
-    documentation: 'Subtract another shape from the current one.',
+    documentation: 'Вычитает одну фигуру из другой.',
     insertText: 'cut(${1:other})',
     kind: 'method',
   },
   {
     label: 'union',
     detail: 'shape.union(other)',
-    documentation: 'Union the current shape with another shape.',
+    documentation: 'Объединяет текущую фигуру с другой.',
     insertText: 'union(${1:other})',
     kind: 'method',
   },
   {
     label: 'intersect',
     detail: 'shape.intersect(other)',
-    documentation: 'Keep only the overlapping area between two shapes.',
+    documentation: 'Оставляет только область пересечения двух фигур.',
     insertText: 'intersect(${1:other})',
     kind: 'method',
   },
   {
     label: 'polarArray',
     detail: 'shape.polarArray(count, angleStepDeg, options?)',
-    documentation: 'Repeat a shape around a circle.',
+    documentation: 'Повторяет фигуру по окружности.',
     insertText:
       'polarArray(${1:count}, ${2:angleStepDeg}, { radius: ${3:40}, rotateItems: ${4:true} })',
     kind: 'method',
@@ -292,7 +410,7 @@ const CAD_METHOD_COMPLETIONS: CompletionDefinition[] = [
   {
     label: 'onLayer',
     detail: "shape.onLayer('cut')",
-    documentation: 'Assign a Maker.js layer to the compiled geometry.',
+    documentation: 'Назначает слой Maker.js для итоговой геометрии.',
     insertText: "onLayer('${1:cut}')",
     kind: 'method',
   },
@@ -301,43 +419,62 @@ const CAD_METHOD_COMPLETIONS: CompletionDefinition[] = [
 export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
   {
     label: 'cad sketch',
-    detail: 'Busy-board sketch scaffold',
-    documentation: 'Start with a cad.sketch root and a single panel.',
-    insertText:
-      'return cad.sketch({\n  panel: cad.panel({\n    width: ${1:120},\n    height: ${2:92},\n    radius: ${3:14}\n  })\n});',
+    detail: 'Минимальный sketch',
+    documentation: 'Быстрый старт с cad.sketch и одной базовой деталью.',
+    insertText: getCadSnippetEditorCode('quickStart'),
     kind: 'snippet',
+    snippetId: 'quickStart',
+  },
+  {
+    label: 'cad scene',
+    detail: 'Небольшая сцена',
+    documentation:
+      'Вставляет компактную сцену с базой, дверцей, часами, дорожкой и фигурой.',
+    insertText: getCadSnippetEditorCode('defaultEditorScene'),
+    kind: 'snippet',
+    snippetId: 'defaultEditorScene',
   },
   {
     label: 'cad panel',
-    detail: 'Panel helper snippet',
-    documentation: 'Insert a laser-cut panel with inset and corner holes.',
-    insertText:
-      "const ${1:panel} = cad.panel({\n  width: ${2:120},\n  height: ${3:92},\n  radius: ${4:14},\n  inset: { margin: ${5:16}, radius: ${6:8} },\n  holes: [\n    { kind: 'circle', x: 18, y: 18, radius: 3 },\n    { kind: 'circle', x: 102, y: 18, radius: 3 }\n  ]\n});",
+    detail: 'Пример панели',
+    documentation: 'Вставляет панель с кромками типа tabs/notches.',
+    insertText: getCadSnippetEditorCode('helperPanel'),
     kind: 'snippet',
+    snippetId: 'helperPanel',
+  },
+  {
+    label: 'cad flat layout',
+    detail: 'Раскладка деталей',
+    documentation:
+      'Вставляет набор согласованных панелей и раскладывает их на листе.',
+    insertText: getCadSnippetEditorCode('helperFlatLayout'),
+    kind: 'snippet',
+    snippetId: 'helperFlatLayout',
   },
   {
     label: 'cad gear',
-    detail: 'Gear helper snippet',
-    documentation: 'Insert a decorative gear and center it on the canvas.',
-    insertText:
-      'const ${1:gear} = cad.gear({\n  teeth: ${2:14},\n  outerRadius: ${3:34},\n  rootRadius: ${4:25},\n  bore: ${5:10}\n}).centerAt([${6:45}, ${7:45}]);',
+    detail: 'Пример шестерни',
+    documentation: 'Вставляет декоративную шестерню и ставит её по центру.',
+    insertText: getCadSnippetEditorCode('helperGear'),
     kind: 'snippet',
+    snippetId: 'helperGear',
   },
   {
     label: 'cad clock',
-    detail: 'Clock face snippet',
-    documentation: 'Insert a clock face with rim, ticks, and center hole.',
-    insertText:
-      'const ${1:clock} = cad.clockFace({\n  radius: ${2:42},\n  rimWidth: ${3:8},\n  tickCount: ${4:12},\n  centerHole: ${5:6}\n});',
+    detail: 'Пример циферблата',
+    documentation:
+      'Вставляет циферблат с ободом, делениями и центральным отверстием.',
+    insertText: getCadSnippetEditorCode('helperClockFace'),
     kind: 'snippet',
+    snippetId: 'helperClockFace',
   },
   {
     label: 'cad track',
-    detail: 'Track path snippet',
-    documentation: 'Insert a simple track path for busy-board mazes.',
-    insertText:
-      'const ${1:maze} = cad.trackPath([\n  [${2:0}, ${3:0}],\n  [${4:60}, ${5:0}],\n  [${6:60}, ${7:30}],\n  [${8:25}, ${9:30}]\n], ${10:10});',
+    detail: 'Пример дорожки',
+    documentation: 'Вставляет простую дорожку для лабиринтов и треков.',
+    insertText: getCadSnippetEditorCode('primitiveTrackPath'),
     kind: 'snippet',
+    snippetId: 'primitiveTrackPath',
   },
 ];
 

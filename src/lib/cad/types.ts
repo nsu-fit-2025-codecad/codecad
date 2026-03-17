@@ -143,12 +143,32 @@ export interface PanelInsetOptions {
   readonly radius?: number;
 }
 
+export type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
+
+export interface PanelEdgeOptions {
+  readonly kind: PanelEdgeKind;
+  readonly count: number;
+  readonly segmentLength: number;
+  readonly depth?: number;
+  readonly inset?: number;
+}
+
+export interface PanelEdgesOptions {
+  readonly top?: PanelEdgeOptions;
+  readonly right?: PanelEdgeOptions;
+  readonly bottom?: PanelEdgeOptions;
+  readonly left?: PanelEdgeOptions;
+}
+
 export interface PanelOptions {
   readonly width: number;
   readonly height: number;
   readonly radius?: number;
   readonly inset?: PanelInsetOptions;
   readonly holes?: readonly PanelHoleSpec[];
+  readonly thickness?: number;
+  readonly clearance?: number;
+  readonly edges?: PanelEdgesOptions;
 }
 
 export interface GearOptions {
@@ -189,6 +209,12 @@ export interface PolarArrayOptions {
 
 export interface SvgPathImportOptions {
   readonly bezierAccuracy?: number;
+}
+
+export interface FlatLayoutOptions {
+  readonly columns: number;
+  readonly gapX: number;
+  readonly gapY: number;
 }
 
 export type AlignTarget = Shape2DLike | Assembly2DLike | Point2D;
@@ -263,6 +289,10 @@ export interface CadRuntime {
     pathData: string,
     options?: SvgPathImportOptions
   ): Shape2DLike;
+  flatLayout(
+    parts: Record<string, Shape2DLike | Assembly2DLike>,
+    options: FlatLayoutOptions
+  ): SketchLike;
   assembly(
     children: Record<string, Shape2DLike | Assembly2DLike>
   ): Assembly2DLike;
