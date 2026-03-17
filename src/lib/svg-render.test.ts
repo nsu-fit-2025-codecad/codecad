@@ -267,14 +267,14 @@ describe('renderModelToSvg', () => {
     const model = createDefaultSceneFixture();
     const svg = renderModelToSvg(model);
 
-    ['clock', 'door', 'gear', 'maze'].forEach((modelId) => {
+    ['board', 'clock', 'door', 'maze', 'rabbit'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   });
 
-  it('keeps parameterized target scene fills aligned after nesting', () => {
-    const model = createParameterizedTargetFixture(352);
-    const result = packModelsIntoTargetModel(model, 'target', {
+  it('keeps default scene fills aligned after nesting', () => {
+    const model = createDefaultSceneFixture();
+    const result = packModelsIntoTargetModel(model, 'board', {
       useGeneticSearch: false,
       allowRotation: true,
     });
@@ -283,7 +283,7 @@ describe('renderModelToSvg', () => {
 
     const svg = result!.svgString;
 
-    ['clock', 'door', 'gear', 'maze', 'target'].forEach((modelId) => {
+    ['board', 'clock', 'door', 'maze', 'rabbit'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   }, 15000);

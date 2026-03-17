@@ -18,6 +18,7 @@ import type {
   PanelEdgeOptions,
   PanelEdgesOptions,
   PanelOptions,
+  ProfiledPanelEdgeOptions,
   Point2D,
   PolarArrayOptions,
   PrimitiveNode,
@@ -412,7 +413,7 @@ const getPanelEdgeLength = (
 ): number => (edge === 'top' || edge === 'bottom' ? width : height);
 
 const resolvePanelEdgeDepth = (
-  edge: PanelEdgeOptions,
+  edge: ProfiledPanelEdgeOptions,
   thickness: number | undefined
 ): number => {
   if (edge.depth !== undefined) {
@@ -430,6 +431,10 @@ const resolvePanelEdgeDepth = (
 
   return thickness;
 };
+
+const isProfiledPanelEdge = (
+  edge: PanelEdgeOptions | undefined
+): edge is ProfiledPanelEdgeOptions => !!edge && edge.kind !== 'plain';
 
 const validatePanelEdges = (
   width: number,
@@ -466,7 +471,7 @@ const validatePanelEdges = (
   }
 
   Object.entries(edges).forEach(([edgeName, edgeOptions]) => {
-    if (!edgeOptions || edgeOptions.kind === 'plain') {
+    if (!isProfiledPanelEdge(edgeOptions)) {
       return;
     }
 
@@ -502,6 +507,17 @@ const validatePanelEdges = (
 
     if (depth <= 0) {
       throw new Error(`${edgeName} edge depth must be greater than 0`);
+    }
+
+    const perpendicularSpan =
+      edgeName === 'top' || edgeName === 'bottom' ? height : width;
+    const effectiveDepth =
+      edgeOptions.kind === 'notches' ? depth + clearance : depth;
+
+    if (edgeOptions.kind === 'notches' && effectiveDepth >= perpendicularSpan) {
+      throw new Error(
+        `${edgeName} notch depth must be smaller than the panel span`
+      );
     }
 
     if (edgeOptions.kind === 'notches' && gap < clearance) {
@@ -622,7 +638,7 @@ const resolvePanelEdgeProfile = (
 ): ResolvedPanelEdgeProfile | null => {
   const edgeOptions = edges?.[edgeName];
 
-  if (!edgeOptions || edgeOptions.kind === 'plain') {
+  if (!isProfiledPanelEdge(edgeOptions)) {
     return null;
   }
 

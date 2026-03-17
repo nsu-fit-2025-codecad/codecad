@@ -85,11 +85,18 @@ describe('normalizeEditorModelResult', () => {
     const model = normalizeEditorModelResult(evaluated);
 
     expect(Object.keys(model.models ?? {}).sort()).toEqual([
+      'board',
       'clock',
       'door',
-      'gear',
       'maze',
+      'rabbit',
     ]);
+  });
+
+  it('keeps DEFAULT_EDITOR_CODE in sync with the default snippet registry entry', () => {
+    expect(DEFAULT_EDITOR_CODE).toBe(
+      CAD_SNIPPETS[DEFAULT_EDITOR_SNIPPET_ID].code
+    );
   });
 
   it('evaluates every cad snippet and the default editor scene without parameters', () => {
@@ -320,6 +327,19 @@ describe('cad shape helpers', () => {
         },
       })
     ).toThrow(/do not support radius/);
+  });
+
+  it('rejects notch depths that reach or cross the opposite panel side', () => {
+    expect(() =>
+      cad.panel({
+        width: 40,
+        height: 20,
+        thickness: 3,
+        edges: {
+          top: { kind: 'notches', count: 1, segmentLength: 10, depth: 20 },
+        },
+      })
+    ).toThrow(/notch depth must be smaller than the panel span/);
   });
 
   it('supports booleans, anchors, and alignment helpers', () => {

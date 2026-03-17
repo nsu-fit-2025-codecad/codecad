@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { DEFAULT_EDITOR_SNIPPET_ID, getCadSnippet } from '@/lib/cad/snippets';
 
 export interface Parameter {
   name: string;
@@ -59,58 +60,9 @@ interface EditorState {
   editSettings: (updates: Partial<EditorSettings>) => void;
 }
 
-export const DEFAULT_EDITOR_CODE = `const door = cad
-  .panel({
-    width: 120,
-    height: 92,
-    radius: 14,
-    inset: { margin: 16, radius: 8 },
-    holes: [
-      { kind: 'circle', x: 18, y: 18, radius: 3 },
-      { kind: 'circle', x: 102, y: 18, radius: 3 },
-      { kind: 'circle', x: 18, y: 74, radius: 3 },
-      { kind: 'circle', x: 102, y: 74, radius: 3 }
-    ]
-  })
-  .onLayer('cut');
-
-const gear = cad
-  .gear({
-    teeth: 14,
-    outerRadius: 34,
-    rootRadius: 25,
-    bore: 10
-  })
-  .centerAt([45, 45])
-  .onLayer('cut');
-
-const clock = cad.clockFace({
-  radius: 42,
-  rimWidth: 8,
-  tickCount: 12,
-  centerHole: 6
-});
-
-const maze = cad
-  .trackPath(
-    [
-      [0, 0],
-      [60, 0],
-      [60, 30],
-      [25, 30],
-      [25, 65],
-      [85, 65]
-    ],
-    10
-  )
-  .onLayer('etch');
-
-return cad.sketch({
-  door,
-  gear: gear.translate(0, 130),
-  clock: clock.translate(170, 10),
-  maze: maze.translate(150, 145)
-});`;
+export const DEFAULT_EDITOR_CODE = getCadSnippet(
+  DEFAULT_EDITOR_SNIPPET_ID
+).code;
 
 export const useEditorStore = create<EditorState>()(
   persist(
