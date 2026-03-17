@@ -70,12 +70,12 @@ describe('configureCadEditor', () => {
     expect(CAD_EDITOR_EXTRA_LIB).toContain(
       "type PanelEdgeKind = 'plain' | 'tabs' | 'notches';"
     );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('type PanelEdgeOptions =');
     expect(CAD_EDITOR_EXTRA_LIB).toContain('interface PanelOptions {');
     expect(CAD_EDITOR_EXTRA_LIB).toContain('interface FlatLayoutOptions {');
     expect(CAD_EDITOR_EXTRA_LIB).toContain('panel(options: {');
-    expect(CAD_EDITOR_EXTRA_LIB).toContain(
-      "kind: 'plain' | 'tabs' | 'notches';"
-    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain("{ kind: 'plain' }");
+    expect(CAD_EDITOR_EXTRA_LIB).toContain("kind: 'tabs' | 'notches';");
     expect(CAD_EDITOR_EXTRA_LIB).toContain('flatLayout(');
     expect(CAD_EDITOR_EXTRA_LIB).toContain(
       'parts: { [id: string]: CadEntity },'

@@ -97,13 +97,15 @@ type Anchor2D =
   | 'left';
 type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
 
-interface PanelEdgeOptions {
-  kind: PanelEdgeKind;
-  count: number;
-  segmentLength: number;
-  depth?: number;
-  inset?: number;
-}
+type PanelEdgeOptions =
+  | { kind: 'plain' }
+  | {
+      kind: 'tabs' | 'notches';
+      count: number;
+      segmentLength: number;
+      depth?: number;
+      inset?: number;
+    };
 
 interface PanelEdgesOptions {
   top?: PanelEdgeOptions;
@@ -189,34 +191,42 @@ interface CadRuntime {
     thickness?: number;
     clearance?: number;
     edges?: {
-      top?: {
-        kind: 'plain' | 'tabs' | 'notches';
-        count: number;
-        segmentLength: number;
-        depth?: number;
-        inset?: number;
-      };
-      right?: {
-        kind: 'plain' | 'tabs' | 'notches';
-        count: number;
-        segmentLength: number;
-        depth?: number;
-        inset?: number;
-      };
-      bottom?: {
-        kind: 'plain' | 'tabs' | 'notches';
-        count: number;
-        segmentLength: number;
-        depth?: number;
-        inset?: number;
-      };
-      left?: {
-        kind: 'plain' | 'tabs' | 'notches';
-        count: number;
-        segmentLength: number;
-        depth?: number;
-        inset?: number;
-      };
+      top?:
+        | { kind: 'plain' }
+        | {
+            kind: 'tabs' | 'notches';
+            count: number;
+            segmentLength: number;
+            depth?: number;
+            inset?: number;
+          };
+      right?:
+        | { kind: 'plain' }
+        | {
+            kind: 'tabs' | 'notches';
+            count: number;
+            segmentLength: number;
+            depth?: number;
+            inset?: number;
+          };
+      bottom?:
+        | { kind: 'plain' }
+        | {
+            kind: 'tabs' | 'notches';
+            count: number;
+            segmentLength: number;
+            depth?: number;
+            inset?: number;
+          };
+      left?:
+        | { kind: 'plain' }
+        | {
+            kind: 'tabs' | 'notches';
+            count: number;
+            segmentLength: number;
+            depth?: number;
+            inset?: number;
+          };
     };
     holes?: readonly Array<
       | {

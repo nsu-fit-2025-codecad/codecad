@@ -145,13 +145,19 @@ export interface PanelInsetOptions {
 
 export type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
 
-export interface PanelEdgeOptions {
-  readonly kind: PanelEdgeKind;
+export interface PlainPanelEdgeOptions {
+  readonly kind: 'plain';
+}
+
+export interface ProfiledPanelEdgeOptions {
+  readonly kind: Exclude<PanelEdgeKind, 'plain'>;
   readonly count: number;
   readonly segmentLength: number;
   readonly depth?: number;
   readonly inset?: number;
 }
+
+export type PanelEdgeOptions = PlainPanelEdgeOptions | ProfiledPanelEdgeOptions;
 
 export interface PanelEdgesOptions {
   readonly top?: PanelEdgeOptions;
