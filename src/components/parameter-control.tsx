@@ -1,5 +1,6 @@
 import React from 'react';
-import { Field, FieldTitle, FieldDescription } from '@/components/ui/field';
+import { Field, FieldTitle } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import type { Parameter } from '@/store/store';
@@ -7,11 +8,13 @@ import type { Parameter } from '@/store/store';
 type ParameterControlProps = {
   parameter: Parameter;
   updateValue: (name: string, value: number) => void;
+  onEdit: (parameter: Parameter) => void;
 };
 
 export const ParameterControl = ({
   parameter,
   updateValue,
+  onEdit
 }: ParameterControlProps) => {
   const [inputValue, setInputValue] = React.useState(String(parameter.value));
 
@@ -25,7 +28,6 @@ export const ParameterControl = ({
   return (
     <Field>
       <FieldTitle>{parameter.name}</FieldTitle>
-      <FieldDescription>{parameter.value}</FieldDescription>
 
       <div className="mt-2 flex items-center gap-3">
         <Input
@@ -57,6 +59,14 @@ export const ParameterControl = ({
           step={parameter.step}
           className="flex-1"
         />
+
+        <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onEdit(parameter)}
+        >
+            Edit
+        </Button>
       </div>
     </Field>
   );
