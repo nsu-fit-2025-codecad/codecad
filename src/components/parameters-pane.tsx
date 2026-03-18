@@ -11,13 +11,11 @@ import { useParametersStore, Parameter } from '@/store/store';
 import { X } from 'lucide-react';
 
 interface ParametersPaneProps {
-  onParametersEdit: () => void;
   onClose: () => void;
   className?: string;
 }
 
 export const ParametersPane = ({
-  onParametersEdit,
   onClose,
   className,
 }: ParametersPaneProps) => {
@@ -42,9 +40,6 @@ export const ParametersPane = ({
         </div>
         <div className="flex gap-4">
           <AddParameterDialog />
-          <Button className="flex-1" onClick={onParametersEdit}>
-            Edit
-          </Button>
         </div>
       </CardHeader>
       <ScrollArea className="w-full">
