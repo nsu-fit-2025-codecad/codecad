@@ -1,0 +1,101 @@
+MVP demo 03: nesting respects holes in the target
+
+Goal
+- Show the nesting MVP on a realistic fabrication scene.
+- Show that target holes are forbidden placement areas.
+- This is the strongest regression/demo case after the nesting fix.
+
+What to show
+1. Paste the code into the editor.
+2. Run nesting with `target` selected as the target shape.
+3. Show the same scene in Standard placement and in Genetic algorithm.
+4. Point out that no part lands inside the handle slots or inner holes of `target`.
+
+Expected result
+- Some parts may remain unplaced, which is acceptable.
+- Placed parts must stay out of the target's inner slots and holes.
+
+Code
+const thickness = 3;
+const clearance = 0.15;
+const boxWidth = 168;
+const boxDepth = 112;
+const boxHeight = 96;
+
+function wallPanel(width, sideKind) {
+  return cad.panel({
+    width,
+    height: boxHeight,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'notches', count: 3, segmentLength: 24, inset: 8 },
+      bottom: { kind: 'notches', count: 3, segmentLength: 24, inset: 8 },
+      left: { kind: sideKind, count: 2, segmentLength: 18, inset: 10 },
+      right: { kind: sideKind, count: 2, segmentLength: 18, inset: 10 }
+    }
+  });
+}
+
+function horizontalPanel(withHandle, w, h) {
+  let panel = cad.panel({
+    width: w ?? boxWidth,
+    height: h ?? boxDepth,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'tabs', count: 3, segmentLength: 24, inset: 8 },
+      bottom: { kind: 'tabs', count: 3, segmentLength: 24, inset: 8 },
+      left: { kind: 'tabs', count: 2, segmentLength: 18, inset: 10 },
+      right: { kind: 'tabs', count: 2, segmentLength: 18, inset: 10 }
+    }
+  });
+
+  if (withHandle) {
+    panel = panel
+      .cut(cad.slot(56, 12).centerAt([boxWidth / 2, 24]))
+      .cut(cad.slot(44, 6).centerAt([boxWidth * 0.25, boxDepth - 12]))
+      .cut(cad.slot(44, 6).centerAt([boxWidth * 0.75, boxDepth - 12]));
+  }
+
+  return panel;
+}
+
+const front = wallPanel(boxWidth, 'tabs')
+  .cut(cad.slot(52, 8).centerAt([boxWidth / 2, boxHeight - 12]));
+
+const back = wallPanel(boxWidth, 'tabs');
+const leftSide = wallPanel(boxDepth, 'notches');
+const rightSide = wallPanel(boxDepth, 'notches')
+  .cut(cad.slot(44, 10).centerAt([boxDepth / 2, 24]));
+
+const bottom = horizontalPanel(false);
+const lid = horizontalPanel(true);
+
+const target = horizontalPanel(true, 300, 300);
+
+return cad.flatLayout(
+  {
+    target,
+    front,
+    back,
+    leftSide,
+    rightSide,
+    bottom,
+    lid,
+    capsule: cad.capsule(200, 123),
+    panel: cad.panel({
+      width: 120,
+      height: 82,
+      thickness: 3,
+      clearance: 0.15,
+      edges: {
+        top: { kind: 'notches', count: 2, segmentLength: 24 },
+        bottom: { kind: 'notches', count: 2, segmentLength: 24 },
+        left: { kind: 'tabs', count: 2, segmentLength: 18 },
+        right: { kind: 'tabs', count: 2, segmentLength: 18 }
+      }
+    })
+  },
+  { columns: 2, gapX: 10, gapY: 15 }
+);
