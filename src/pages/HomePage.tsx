@@ -13,6 +13,16 @@ import { NestingTargetDialog } from '@/components/nesting-target-dialog';
 import { NestingStatus } from '@/components/nesting-status';
 import { useNestingController } from '@/lib/nesting/controller/use-nesting-controller';
 import { renderModelToSvg } from '@/lib/svg-render';
+import { MvpDemoPanel } from '@/components/mvp-demo-panel';
+import {
+  getMvpDemoNestingPreset,
+  getMvpDemoScene,
+  type MvpDemoNestingPresetId,
+  type MvpDemoSceneId,
+} from '@/lib/demo/mvp-demo';
+import { cn } from '@/lib/utils';
+
+const AUTORUN_EVALUATION_DELAY_MS = 180;
 
 interface ResolveDisplayedSvgInput {
   committedSvg: string;
@@ -32,28 +42,34 @@ export const resolveDisplayedSvg = ({
 export const HomePage = () => {
   const [svg, setSvg] = useState<string>('');
   const [model, setModel] = useState<IModel | null>(null);
+  const [activeDemoSceneId, setActiveDemoSceneId] =
+    useState<MvpDemoSceneId | null>(null);
   const modelRevisionRef = useRef(0);
 
-  const { parameters } = useParametersStore();
+  const { replaceAll: replaceAllParameters } = useParametersStore();
   const {
     update,
     updateFitStatus,
     selectedModelId,
     models: availableModels,
   } = useModelsStore();
-  const { code, settings } = useEditorStore();
+  const { code, editCode, settings } = useEditorStore();
   const {
     isModelsPaneOpen,
     isParametersPaneOpen,
+    isDemoPaneOpen,
     closeModelsPane,
     closeParametersPane,
+    closeDemoPane,
+    openParametersPane,
+    toggleDemoPane,
   } = usePanesStore();
 
-  const bumpModelRevision = () => {
+  const bumpModelRevision = useCallback(() => {
     modelRevisionRef.current += 1;
-  };
+  }, []);
 
-  const getModelRevision = () => modelRevisionRef.current;
+  const getModelRevision = useCallback(() => modelRevisionRef.current, []);
 
   const {
     nestingOptions,
@@ -77,6 +93,48 @@ export const HomePage = () => {
     getModelRevision,
     bumpModelRevision,
   });
+
+  const evaluateSourceCode = useCallback(
+    (
+      sourceCode: string,
+      runtimeParameters = useParametersStore.getState().parameters
+    ) => {
+      if (!sourceCode) {
+        return;
+      }
+
+      try {
+        const createModel = new Function(
+          'makerjs',
+          'cad',
+          ...runtimeParameters.map((parameter) => parameter.name),
+          `return (function() {
+          ${sourceCode}
+        })();`
+        );
+
+        const executionResult = createModel(
+          makerjs,
+          cad,
+          ...runtimeParameters.map((parameter) => parameter.value)
+        );
+        const nextModel: IModel = normalizeEditorModelResult(executionResult);
+
+        setModel(nextModel);
+        if (nextModel.models) {
+          update(mapModelsToSizes(nextModel.models));
+        }
+
+        setSvg(renderModelToSvg(nextModel));
+        bumpModelRevision();
+      } catch (nextError) {
+        console.error('Error:', nextError);
+        setSvg('');
+        bumpModelRevision();
+      }
+    },
+    [bumpModelRevision, update]
+  );
 
   const exportDXF = () => {
     if (!model) {
@@ -114,44 +172,55 @@ export const HomePage = () => {
       return;
     }
 
-    try {
-      const createModel = new Function(
-        'makerjs',
-        'cad',
-        ...parameters.map((parameter) => parameter.name),
-        `return (function() {
-          ${code}
-        })();`
-      );
-
-      const executionResult = createModel(
-        makerjs,
-        cad,
-        ...parameters.map((parameter) => parameter.value)
-      );
-      const nextModel: IModel = normalizeEditorModelResult(executionResult);
-
-      setModel(nextModel);
-      if (nextModel.models) {
-        update(mapModelsToSizes(nextModel.models));
-      }
-
-      setSvg(renderModelToSvg(nextModel));
-      bumpModelRevision();
-    } catch (nextError) {
-      console.error('Error:', nextError);
-      setSvg('');
-      bumpModelRevision();
-    }
-  }, [code, parameters, update]);
+    evaluateSourceCode(code);
+  }, [code, evaluateSourceCode]);
 
   React.useEffect(() => {
-    if (!settings.autorun) {
+    if (!settings.autorun || !code) {
       return;
     }
 
-    evalInput();
-  }, [evalInput, settings.autorun, code, parameters]);
+    const timeoutId = setTimeout(() => {
+      evaluateSourceCode(code);
+    }, AUTORUN_EVALUATION_DELAY_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [code, evaluateSourceCode, settings.autorun]);
+
+  const handleLoadDemoScene = useCallback(
+    (sceneId: MvpDemoSceneId) => {
+      const scene = getMvpDemoScene(sceneId);
+
+      // Demo loads replace the whole parameter set so the pane matches the scene.
+      replaceAllParameters(scene.parameters);
+      openParametersPane();
+      setActiveDemoSceneId(sceneId);
+      editCode(scene.code);
+
+      if (!settings.autorun) {
+        evaluateSourceCode(scene.code, scene.parameters);
+      }
+    },
+    [
+      editCode,
+      evaluateSourceCode,
+      openParametersPane,
+      replaceAllParameters,
+      settings.autorun,
+    ]
+  );
+
+  const applyDemoNestingPreset = useCallback(
+    (_sceneId: MvpDemoSceneId, presetId: MvpDemoNestingPresetId) => {
+      const preset = getMvpDemoNestingPreset(presetId);
+
+      setNestingOptions(preset.options);
+      setIsDialogOpen(true);
+    },
+    [setIsDialogOpen, setNestingOptions]
+  );
 
   const runNesting = () => {
     if (!model || !model.models || isRunning) {
@@ -175,7 +244,9 @@ export const HomePage = () => {
       <Toolbar
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
         onRunNesting={runNesting}
+        onToggleDemoGuide={toggleDemoPane}
         isNesting={isRunning}
+        isDemoGuideOpen={isDemoPaneOpen}
       />
       <NestingTargetDialog
         open={isDialogOpen}
@@ -198,6 +269,18 @@ export const HomePage = () => {
           error={error}
           onCancel={cancelNestingRun}
           onDismiss={dismissNestingStatus}
+        />
+      )}
+      {isDemoPaneOpen && (
+        <MvpDemoPanel
+          activeSceneId={activeDemoSceneId}
+          className={cn(
+            'fixed top-4 z-20 h-[calc(100vh-7rem)] w-[min(26rem,calc(100vw-2rem))]',
+            isParametersPaneOpen ? 'right-4 lg:right-[22rem]' : 'right-4'
+          )}
+          onClose={closeDemoPane}
+          onLoadScene={handleLoadDemoScene}
+          onPrepareNestingPreset={applyDemoNestingPreset}
         />
       )}
       {isModelsPaneOpen && (

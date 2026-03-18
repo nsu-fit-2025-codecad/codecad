@@ -7,13 +7,17 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
+  onToggleDemoGuide: () => void;
   isNesting?: boolean;
+  isDemoGuideOpen?: boolean;
   className?: string;
 }
 
 export const Toolbar = ({
   onRunNesting,
+  onToggleDemoGuide,
   isNesting = false,
+  isDemoGuideOpen = false,
   className,
 }: ToolbarProps) => {
   const {
@@ -57,6 +61,17 @@ export const Toolbar = ({
           disabled={isNesting}
         >
           <Package />
+        </Button>
+        <Button
+          variant={isDemoGuideOpen ? 'default' : 'outline'}
+          onClick={onToggleDemoGuide}
+          className="cursor-pointer"
+          size="sm"
+          title={
+            isDemoGuideOpen ? 'Close MVP demo guide' : 'Open MVP demo guide'
+          }
+        >
+          MVP
         </Button>
         <ThemeToggle />
       </CardContent>

@@ -4,6 +4,7 @@ import { DEFAULT_EDITOR_CODE } from '@/store/store';
 import {
   CAD_SNIPPETS,
   DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippetParameters,
   type CadSnippetId,
 } from '@/lib/cad/snippets';
 import {
@@ -99,7 +100,7 @@ describe('normalizeEditorModelResult', () => {
     );
   });
 
-  it('evaluates every cad snippet and the default editor scene without parameters', () => {
+  it('evaluates every cad snippet and the default editor scene with snippet parameters', () => {
     const snippetIds: CadSnippetId[] = Array.from(
       new Set<CadSnippetId>([
         ...(Object.keys(CAD_SNIPPETS) as CadSnippetId[]),
@@ -108,14 +109,20 @@ describe('normalizeEditorModelResult', () => {
     );
 
     snippetIds.forEach((snippetId) => {
+      const snippetParameters = getCadSnippetParameters(snippetId);
       const createModel = new Function(
         'makerjs',
         'cad',
+        ...snippetParameters.map((parameter) => parameter.name),
         `return (function () {
           ${CAD_SNIPPETS[snippetId].code}
         })();`
       );
-      const evaluated = createModel(makerjs, cad);
+      const evaluated = createModel(
+        makerjs,
+        cad,
+        ...snippetParameters.map((parameter) => parameter.value)
+      );
       const model = normalizeEditorModelResult(evaluated);
       const extents = makerjs.measure.modelExtents(model);
       const renderableEntitiesCount =
@@ -373,6 +380,16 @@ describe('cad shape helpers', () => {
     expect(Object.keys(model.models?.grid?.models ?? {}).length).toBe(4);
   });
 
+  it('accepts arrays directly in cad.sketch for multi-part scenes', () => {
+    const sketch = cad.sketch([
+      cad.rect(30, 10),
+      cad.circle(5).centerAt([50, 10]),
+    ]);
+    const model = normalizeEditorModelResult(sketch);
+
+    expect(Object.keys(model.models ?? {}).sort()).toEqual(['item1', 'item2']);
+  });
+
   it('lays out parts row-by-row with stable ids and expected gaps', () => {
     const sketch = cad.flatLayout(
       {
@@ -399,6 +416,20 @@ describe('cad shape helpers', () => {
       14,
       6
     );
+  });
+
+  it('accepts arrays in flatLayout and generates stable part ids', () => {
+    const sketch = cad.flatLayout(
+      [cad.rect(30, 10), cad.rect(20, 16), cad.rect(18, 12)],
+      { columns: 2, gapX: 10, gapY: 14 }
+    );
+    const model = normalizeEditorModelResult(sketch);
+
+    expect(Object.keys(model.models ?? {}).sort()).toEqual([
+      'part1',
+      'part2',
+      'part3',
+    ]);
   });
 
   it('uses assembly placement bounds for flat layout', () => {

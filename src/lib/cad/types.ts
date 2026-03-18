@@ -259,6 +259,12 @@ export interface Shape2DLike {
 
 export type Assembly2DLike = Shape2DLike;
 
+export type CadChildLike = Shape2DLike | Assembly2DLike;
+export type CadChildrenValue = CadChildLike | readonly CadChildLike[];
+export type CadChildrenInput =
+  | Record<string, CadChildrenValue>
+  | readonly CadChildLike[];
+
 export interface SketchLike {
   getNode(): SketchNode;
   onLayer(layer: string): SketchLike;
@@ -295,13 +301,8 @@ export interface CadRuntime {
     pathData: string,
     options?: SvgPathImportOptions
   ): Shape2DLike;
-  flatLayout(
-    parts: Record<string, Shape2DLike | Assembly2DLike>,
-    options: FlatLayoutOptions
-  ): SketchLike;
-  assembly(
-    children: Record<string, Shape2DLike | Assembly2DLike>
-  ): Assembly2DLike;
-  sketch(children: Record<string, Shape2DLike | Assembly2DLike>): SketchLike;
+  flatLayout(parts: CadChildrenInput, options: FlatLayoutOptions): SketchLike;
+  assembly(children: CadChildrenInput): Assembly2DLike;
+  sketch(children: CadChildrenInput): SketchLike;
   compileToMaker(value: Shape2DLike | Assembly2DLike | SketchLike): IModel;
 }

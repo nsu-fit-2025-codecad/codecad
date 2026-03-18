@@ -1,7 +1,10 @@
+import type { Parameter } from '@/store/store';
+
 export interface CadSnippet {
   title: string;
   code: string;
   editorCode: string;
+  parameters?: Parameter[];
 }
 
 const defineSnippet = (
@@ -12,6 +15,14 @@ const defineSnippet = (
   title,
   code,
   editorCode,
+});
+
+const withParameters = (
+  snippet: CadSnippet,
+  parameters: readonly Parameter[]
+): CadSnippet => ({
+  ...snippet,
+  parameters: parameters.map((parameter) => ({ ...parameter })),
 });
 
 export const CAD_SNIPPETS = {
@@ -328,6 +339,341 @@ return cad.flatLayout(
   { columns: 2, gapX: 20, gapY: 20 }
 );`
   ),
+  editorFlatScene: defineSnippet(
+    'Scene Layout',
+    `const plate = cad
+  .roundRect(120, 70, 12)
+  .cut(cad.slot(52, 10).centerAt([60, 18]))
+  .onLayer('cut');
+
+const bracket = cad
+  .panel({
+    width: 64,
+    height: 42,
+    radius: 8,
+    holes: [
+      { kind: 'circle', x: 16, y: 21, radius: 4 },
+      { kind: 'circle', x: 48, y: 21, radius: 4 }
+    ]
+  })
+  .onLayer('cut');
+
+const spacer = cad.ring(18, 8).centerAt([18, 18]).onLayer('cut');
+
+return cad.flatLayout([plate, bracket, spacer], {
+  columns: 2,
+  gapX: 18,
+  gapY: 18
+});`
+  ),
+  demoMountingPlate: withParameters(
+    defineSnippet(
+      'Mounting Plate',
+      `const mountingPlate = cad
+  .panel({
+    width: plateWidth,
+    height: plateHeight,
+    radius: plateRadius,
+    holes: [
+      { kind: 'circle', x: 18, y: 18, radius: 3.5 },
+      { kind: 'circle', x: plateWidth - 18, y: 18, radius: 3.5 },
+      { kind: 'circle', x: 18, y: plateHeight - 18, radius: 3.5 },
+      { kind: 'circle', x: plateWidth - 18, y: plateHeight - 18, radius: 3.5 }
+    ]
+  })
+  .cut(cad.slot(slotLength, 12).centerAt([plateWidth / 2, 28]))
+  .cut(
+    cad
+      .roundRect(windowWidth, windowHeight, 8)
+      .centerAt([plateWidth / 2, plateHeight - 38])
+  )
+  .cut(cad.circle(6).centerAt([plateWidth / 2, plateHeight - 38]))
+  .onLayer('cut');
+
+return cad.sketch({
+  mountingPlate
+});`
+    ),
+    [
+      { name: 'plateWidth', value: 180, min: 120, max: 260, step: 1 },
+      { name: 'plateHeight', value: 110, min: 80, max: 180, step: 1 },
+      { name: 'plateRadius', value: 12, min: 4, max: 24, step: 1 },
+      { name: 'slotLength', value: 68, min: 32, max: 120, step: 1 },
+      { name: 'windowWidth', value: 46, min: 28, max: 80, step: 1 },
+      { name: 'windowHeight', value: 30, min: 18, max: 60, step: 1 },
+    ]
+  ),
+  demoRailPack: withParameters(
+    defineSnippet(
+      'Rail Pack',
+      `const target = cad.rect(stockWidth, stockHeight).onLayer('stock');
+
+function rail(length) {
+  const holeInset = railWidth / 2;
+  const slotLength = Math.max(length - 48, 24);
+
+  return cad
+    .panel({
+      width: railWidth,
+      height: length,
+      radius: Math.max(4, Math.round(railWidth / 4)),
+      holes: [
+        { kind: 'circle', x: holeInset, y: holeInset, radius: 3 },
+        { kind: 'circle', x: holeInset, y: length - holeInset, radius: 3 }
+      ]
+    })
+    .cut(cad.slot(slotLength, 8).centerAt([railWidth / 2, length / 2]))
+    .onLayer('cut');
+}
+
+const railA = rail(railLength);
+const railB = rail(railLength - railStep);
+const railC = rail(railLength - railStep * 2);
+const bracketHeight = Math.max(36, Math.round(bracketWidth * 0.62));
+const angleBracket = cad
+  .panel({
+    width: bracketWidth,
+    height: bracketHeight,
+    radius: 8,
+    holes: [
+      { kind: 'circle', x: 16, y: bracketHeight / 2, radius: 4 },
+      { kind: 'circle', x: bracketWidth - 16, y: bracketHeight / 2, radius: 4 }
+    ]
+  })
+  .onLayer('cut');
+
+return cad.sketch({
+  target,
+  railA: railA.translate(270, 0),
+  railB: railB.translate(310, 0),
+  railC: railC.translate(350, 0),
+  angleBracket: angleBracket.translate(270, 150)
+});`
+    ),
+    [
+      { name: 'stockWidth', value: 240, min: 180, max: 320, step: 1 },
+      { name: 'stockHeight', value: 110, min: 80, max: 160, step: 1 },
+      { name: 'railWidth', value: 26, min: 18, max: 40, step: 1 },
+      { name: 'railLength', value: 132, min: 96, max: 180, step: 1 },
+      { name: 'railStep', value: 8, min: 4, max: 18, step: 1 },
+      { name: 'bracketWidth', value: 68, min: 48, max: 90, step: 1 },
+    ]
+  ),
+  demoTrayInserts: withParameters(
+    defineSnippet(
+      'Tray Inserts',
+      `const target = cad.rect(stockWidth, stockHeight).onLayer('stock');
+
+function trayInsert(width, height, mouthSide) {
+  const shell = cad.roundRect(width, height, 10);
+  const mouth = cad
+    .slot(mouthLength, 18)
+    .alignTo(shell, 'center', mouthSide === 'left' ? 'left' : 'right');
+  const locatorX = mouthSide === 'left' ? width - 18 : 18;
+
+  return shell
+    .cut(mouth)
+    .cut(cad.circle(5).centerAt([locatorX, height / 2]))
+    .onLayer('cut');
+}
+
+const trayLeft = trayInsert(trayWidth, trayHeight, 'right');
+const trayRight = trayInsert(trayWidth, trayHeight, 'left');
+const fillerWidth = Math.round(trayWidth * 0.36);
+const fillerHeight = Math.round(trayHeight * 0.4);
+const fillerA = cad.roundRect(fillerWidth, fillerHeight, 5).onLayer('cut');
+const fillerB = cad.rect(fillerWidth + 2, fillerHeight + 2).onLayer('cut');
+const latch = cad.capsule(latchLength, 18).onLayer('cut');
+
+return cad.sketch({
+  target,
+  trayLeft: trayLeft.translate(215, 0),
+  trayRight: trayRight.translate(315, 0),
+  fillerA: fillerA.translate(215, 88),
+  fillerB: fillerB.translate(260, 88),
+  latch: latch.translate(310, 90)
+});`
+    ),
+    [
+      { name: 'stockWidth', value: 190, min: 150, max: 260, step: 1 },
+      { name: 'stockHeight', value: 120, min: 90, max: 180, step: 1 },
+      { name: 'trayWidth', value: 88, min: 70, max: 110, step: 1 },
+      { name: 'trayHeight', value: 56, min: 44, max: 80, step: 1 },
+      { name: 'mouthLength', value: 34, min: 18, max: 50, step: 1 },
+      { name: 'latchLength', value: 56, min: 40, max: 80, step: 1 },
+    ]
+  ),
+  demoFrameInsert: withParameters(
+    defineSnippet(
+      'Frame Insert',
+      `const target = cad.rect(stockWidth, stockHeight).onLayer('stock');
+const insertWidth = frameWidth - frameBorder * 2 - insertClearance;
+const insertHeight = frameHeight - frameBorder * 2 - insertClearance;
+
+const frame = cad
+  .frame(frameWidth, frameHeight, frameBorder, { radius: 10 })
+  .cut(cad.circle(5).centerAt([18, 18]))
+  .cut(cad.circle(5).centerAt([frameWidth - 18, 18]))
+  .cut(cad.circle(5).centerAt([18, frameHeight - 18]))
+  .cut(cad.circle(5).centerAt([frameWidth - 18, frameHeight - 18]))
+  .onLayer('cut');
+
+const insert = cad.roundRect(insertWidth, insertHeight, 8).onLayer('cut');
+const latch = cad.capsule(56, 18).onLayer('cut');
+const shim = cad.roundRect(frameBorder * 2 + 8, frameBorder, 4).onLayer('cut');
+const cap = cad
+  .roundRect(34, 34, 8)
+  .cut(cad.circle(8).centerAt([17, 17]))
+  .onLayer('cut');
+
+return cad.sketch({
+  target,
+  frame: frame.translate(250, 0),
+  insert: insert.translate(250, 110),
+  latch: latch.translate(340, 110),
+  shim: shim.translate(410, 112),
+  cap: cap.translate(470, 104)
+});`
+    ),
+    [
+      { name: 'stockWidth', value: 220, min: 180, max: 300, step: 1 },
+      { name: 'stockHeight', value: 140, min: 110, max: 200, step: 1 },
+      { name: 'frameWidth', value: 118, min: 100, max: 150, step: 1 },
+      { name: 'frameHeight', value: 90, min: 84, max: 120, step: 1 },
+      { name: 'frameBorder', value: 18, min: 12, max: 24, step: 1 },
+      { name: 'insertClearance', value: 6, min: 2, max: 10, step: 1 },
+    ]
+  ),
+  demoPerforatedSheet: withParameters(
+    defineSnippet(
+      'Perforated Sheet',
+      `const target = cad
+  .panel({
+    width: sheetWidth,
+    height: sheetHeight,
+    radius: 14,
+    holes: [
+      { kind: 'circle', x: sheetWidth * 0.18, y: 50, radius: holeRadius },
+      { kind: 'circle', x: sheetWidth * 0.5, y: 50, radius: holeRadius },
+      { kind: 'circle', x: sheetWidth * 0.82, y: 50, radius: holeRadius },
+      { kind: 'slot', x: sheetWidth * 0.25, y: sheetHeight - 50, length: outerSlotLength, width: 14 },
+      { kind: 'slot', x: sheetWidth * 0.5, y: sheetHeight - 50, length: centerSlotLength, width: 16 },
+      { kind: 'slot', x: sheetWidth * 0.75, y: sheetHeight - 50, length: outerSlotLength, width: 14 }
+    ]
+  })
+  .onLayer('stock');
+
+const coverA = cad
+  .panel({
+    width: coverWidth,
+    height: 52,
+    radius: 8,
+    holes: [
+      { kind: 'circle', x: 18, y: 26, radius: 4 },
+      { kind: 'circle', x: coverWidth - 18, y: 26, radius: 4 }
+    ]
+  })
+  .onLayer('cut');
+
+const coverBWidth = Math.max(64, coverWidth - 14);
+const coverB = cad
+  .panel({
+    width: coverBWidth,
+    height: 50,
+    radius: 8,
+    holes: [
+      { kind: 'circle', x: 20, y: 25, radius: 4 },
+      { kind: 'circle', x: coverBWidth - 20, y: 25, radius: 4 }
+    ]
+  })
+  .onLayer('cut');
+
+const handle = cad
+  .capsule(coverWidth - 8, 24)
+  .cut(cad.slot(Math.max(28, coverWidth - 56), 8).centerAt([(coverWidth - 8) / 2, 12]))
+  .onLayer('cut');
+
+const brace = cad.rect(coverWidth - 22, 20).onLayer('cut');
+const anchor = cad
+  .roundRect(46, 46, 8)
+  .cut(cad.circle(8).centerAt([23, 23]))
+  .onLayer('cut');
+
+return cad.sketch({
+  target,
+  coverA: coverA.translate(310, 0),
+  coverB: coverB.translate(310, 70),
+  handle: handle.translate(310, 140),
+  brace: brace.translate(415, 0),
+  anchor: anchor.translate(415, 48)
+});`
+    ),
+    [
+      { name: 'sheetWidth', value: 280, min: 220, max: 340, step: 1 },
+      { name: 'sheetHeight', value: 190, min: 150, max: 260, step: 1 },
+      { name: 'holeRadius', value: 18, min: 12, max: 28, step: 1 },
+      { name: 'outerSlotLength', value: 46, min: 24, max: 72, step: 1 },
+      { name: 'centerSlotLength', value: 62, min: 36, max: 90, step: 1 },
+      { name: 'coverWidth', value: 96, min: 72, max: 120, step: 1 },
+    ]
+  ),
+  demoRoundedMix: withParameters(
+    defineSnippet(
+      'Rounded Mix',
+      `const target = cad
+  .roundRect(stockWidth, stockHeight, Math.round(Math.min(stockWidth, stockHeight) * 0.12))
+  .onLayer('stock');
+
+const handle = cad
+  .capsule(handleLength, 32)
+  .cut(cad.slot(handleLength - 56, 10).centerAt([handleLength / 2, 16]))
+  .onLayer('cut');
+
+const motorPlate = cad
+  .roundRect(motorPlateWidth, 62, 12)
+  .cut(cad.circle(7).centerAt([20, 20]))
+  .cut(cad.circle(7).centerAt([motorPlateWidth - 20, 20]))
+  .cut(cad.circle(7).centerAt([20, 42]))
+  .cut(cad.circle(7).centerAt([motorPlateWidth - 20, 42]))
+  .cut(cad.circle(10).centerAt([motorPlateWidth / 2, 31]))
+  .onLayer('cut');
+
+const sensorBracket = cad
+  .capsule(sensorBracketLength, 28)
+  .cut(cad.circle(5).centerAt([18, 14]))
+  .cut(cad.circle(5).centerAt([sensorBracketLength - 18, 14]))
+  .onLayer('cut');
+
+const sealPad = cad
+  .roundRect(sealPadWidth, 40, 10)
+  .cut(cad.slot(Math.max(20, sealPadWidth - 34), 8).centerAt([sealPadWidth / 2, 20]))
+  .onLayer('cut');
+
+const spacerRing = cad.ring(28, 16).centerAt([28, 28]).onLayer('cut');
+const arcBrace = cad
+  .capsule(handleLength - 26, 26)
+  .cut(cad.slot(handleLength - 70, 8).centerAt([(handleLength - 26) / 2, 13]))
+  .onLayer('cut');
+
+return cad.sketch({
+  target,
+  handle: handle.translate(280, 0),
+  motorPlate: motorPlate.translate(280, 60),
+  sensorBracket: sensorBracket.translate(380, 60),
+  sealPad: sealPad.translate(280, 140),
+  spacerRing: spacerRing.translate(360, 140),
+  arcBrace: arcBrace.translate(410, 0)
+});`
+    ),
+    [
+      { name: 'stockWidth', value: 250, min: 200, max: 320, step: 1 },
+      { name: 'stockHeight', value: 170, min: 130, max: 240, step: 1 },
+      { name: 'handleLength', value: 118, min: 90, max: 150, step: 1 },
+      { name: 'motorPlateWidth', value: 78, min: 60, max: 100, step: 1 },
+      { name: 'sensorBracketLength', value: 74, min: 54, max: 100, step: 1 },
+      { name: 'sealPadWidth', value: 64, min: 44, max: 90, step: 1 },
+    ]
+  ),
   helperSpokeWheel: defineSnippet(
     'spokeWheel',
     `return cad.sketch({
@@ -465,3 +811,8 @@ export const getCadSnippet = (snippetId: CadSnippetId): CadSnippet =>
 
 export const getCadSnippetEditorCode = (snippetId: CadSnippetId): string =>
   CAD_SNIPPETS[snippetId].editorCode;
+
+export const getCadSnippetParameters = (snippetId: CadSnippetId): Parameter[] =>
+  (CAD_SNIPPETS[snippetId].parameters ?? []).map((parameter) => ({
+    ...parameter,
+  }));

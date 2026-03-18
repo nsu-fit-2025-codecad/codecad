@@ -5,6 +5,8 @@ import type {
   Anchor2D,
   AssemblyNode,
   Assembly2DLike,
+  CadChildLike,
+  CadChildrenInput,
   CadRuntime,
   CircleHoleSpec,
   ClockFaceOptions,
@@ -165,17 +167,62 @@ const validateChildId = (childId: string): void => {
   }
 };
 
-const toEntityNode = (value: Shape2DLike | Assembly2DLike): EntityNode =>
-  value.getNode();
+const isCadChildLike = (value: unknown): value is CadChildLike =>
+  typeof value === 'object' &&
+  value !== null &&
+  'getNode' in value &&
+  typeof value.getNode === 'function';
+
+const toEntityNode = (value: CadChildLike): EntityNode => value.getNode();
+
+const normalizeChildrenEntries = (
+  children: CadChildrenInput,
+  fallbackPrefix: string
+): Array<[string, CadChildLike]> => {
+  if (Array.isArray(children)) {
+    return children.map((child, index) => {
+      if (!isCadChildLike(child)) {
+        throw new Error('children arrays must contain cad entities');
+      }
+
+      return [`${fallbackPrefix}${index + 1}`, child];
+    });
+  }
+
+  return Object.entries(children).flatMap(([childId, childValue]) => {
+    validateChildId(childId);
+
+    if (Array.isArray(childValue)) {
+      return childValue.map((child, index) => {
+        if (!isCadChildLike(child)) {
+          throw new Error(
+            `Child array '${childId}' must contain only cad entities`
+          );
+        }
+
+        return [
+          childValue.length === 1 ? childId : `${childId}${index + 1}`,
+          child,
+        ] satisfies [string, CadChildLike];
+      });
+    }
+
+    if (!isCadChildLike(childValue)) {
+      throw new Error(`Child '${childId}' must be a cad entity`);
+    }
+
+    return [[childId, childValue]];
+  });
+};
 
 const createChildrenMap = (
-  children: Record<string, Shape2DLike | Assembly2DLike>
+  children: CadChildrenInput,
+  fallbackPrefix = 'item'
 ): Readonly<Record<string, EntityNode>> =>
   Object.fromEntries(
-    Object.entries(children).map(([childId, child]) => {
-      validateChildId(childId);
-      return [childId, child.getNode()];
-    })
+    normalizeChildrenEntries(children, fallbackPrefix).map(
+      ([childId, child]) => [childId, toEntityNode(child)]
+    )
   );
 
 interface PlacementBounds {
@@ -351,7 +398,7 @@ const buildAssemblyNode = (nodes: readonly EntityNode[], prefix: string) => ({
 });
 
 const createAssemblyEntity = (
-  children: Record<string, Shape2DLike | Assembly2DLike>,
+  children: CadChildrenInput,
   placementChildId?: string
 ): Assembly2D =>
   new Assembly2D({
@@ -1480,27 +1527,25 @@ const buildClockFace = (options: ClockFaceOptions): Assembly2D => {
 };
 
 const buildFlatLayout = (
-  parts: Record<string, Shape2DLike | Assembly2DLike>,
+  parts: CadChildrenInput,
   options: FlatLayoutOptions
 ): SketchLike => {
   assertPositiveInteger(options.columns, 'columns');
   assertNonNegativeNumber(options.gapX, 'gapX');
   assertNonNegativeNumber(options.gapY, 'gapY');
 
-  const entries = Object.entries(parts);
+  const entries = normalizeChildrenEntries(parts, 'part');
 
   if (entries.length === 0) {
     throw new Error('flatLayout requires at least one part');
   }
 
-  const laidOutParts: Record<string, Shape2DLike | Assembly2DLike> = {};
+  const laidOutParts: Record<string, CadChildLike> = {};
   let cursorX = 0;
   let cursorY = 0;
   let currentRowHeight = 0;
 
   entries.forEach(([childId, child], index) => {
-    validateChildId(childId);
-
     if (index > 0 && index % options.columns === 0) {
       cursorX = 0;
       cursorY += currentRowHeight + options.gapY;
@@ -1524,8 +1569,8 @@ const buildFlatLayout = (
 };
 
 export const cad: CadRuntime & {
-  assembly(children: Record<string, Shape2DLike | Assembly2DLike>): Assembly2D;
-  sketch(children: Record<string, Shape2DLike | Assembly2DLike>): Sketch;
+  assembly(children: CadChildrenInput): Assembly2D;
+  sketch(children: CadChildrenInput): Sketch;
   compileToMaker(value: CadRenderable): IModel;
 } = Object.freeze({
   rect(width: number, height: number) {
@@ -1674,18 +1719,15 @@ export const cad: CadRuntime & {
     return asShape(createModelNode(model));
   },
 
-  flatLayout(
-    parts: Record<string, Shape2DLike | Assembly2DLike>,
-    options: FlatLayoutOptions
-  ) {
+  flatLayout(parts: CadChildrenInput, options: FlatLayoutOptions) {
     return buildFlatLayout(parts, options);
   },
 
-  assembly(children: Record<string, Shape2DLike | Assembly2DLike>) {
+  assembly(children: CadChildrenInput) {
     return createAssemblyEntity(children);
   },
 
-  sketch(children: Record<string, Shape2DLike | Assembly2DLike>) {
+  sketch(children: CadChildrenInput) {
     return new Sketch({
       kind: 'sketch',
       children: createChildrenMap(children),

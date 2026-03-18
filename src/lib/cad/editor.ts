@@ -82,6 +82,17 @@ interface MonacoEditorApi {
   };
 }
 
+interface CadEditorEnhancementState {
+  owner: symbol | null;
+  monaco: MonacoEditorApi | null;
+  extraLibDisposable: DisposableLike | null;
+  completionDisposable: DisposableLike | null;
+}
+
+const CAD_EDITOR_ENHANCEMENT_STATE_KEY =
+  '__code_cad_monaco_enhancements__' as const;
+const CAD_EDITOR_MODULE_TOKEN = Symbol('cad-editor-module');
+
 export const CAD_EDITOR_EXTRA_LIB = `
 type Point2D = readonly [number, number];
 type Anchor2D =
@@ -146,6 +157,9 @@ interface FlatLayoutOptions {
   gapX: number;
   gapY: number;
 }
+
+type CadChild = CadEntity | readonly CadEntity[];
+type CadChildrenInput = { [id: string]: CadChild } | readonly CadEntity[];
 
 interface CadEntity {
   translate(x: number, y: number): CadEntity;
@@ -272,159 +286,21 @@ interface CadRuntime {
   }): CadEntity;
   fromSvgPathData(pathData: string, options?: { bezierAccuracy?: number }): CadEntity;
   flatLayout(
-    parts: { [id: string]: CadEntity },
+    parts: CadChildrenInput,
     options: {
       columns: number;
       gapX: number;
       gapY: number;
     }
   ): CadEntity;
-  assembly(children: Record<string, CadEntity>): CadEntity;
-  sketch(children: Record<string, CadEntity>): CadEntity;
+  assembly(children: CadChildrenInput): CadEntity;
+  sketch(children: CadChildrenInput): CadEntity;
   compileToMaker(value: CadEntity): unknown;
 }
 
 declare const cad: CadRuntime;
 declare const makerjs: any;
 `;
-
-const CAD_FACTORY_COMPLETIONS: CompletionDefinition[] = [
-  {
-    label: 'rect',
-    detail: 'cad.rect(width, height)',
-    documentation: 'Создаёт прямоугольник от локальной точки [0, 0].',
-    insertText: 'rect(${1:width}, ${2:height})',
-    kind: 'function',
-  },
-  {
-    label: 'circle',
-    detail: 'cad.circle(radius)',
-    documentation: 'Создаёт круг с центром в локальной точке [0, 0].',
-    insertText: 'circle(${1:radius})',
-    kind: 'function',
-  },
-  {
-    label: 'roundRect',
-    detail: 'cad.roundRect(width, height, radius)',
-    documentation: 'Создаёт скруглённый прямоугольник.',
-    insertText: 'roundRect(${1:width}, ${2:height}, ${3:radius})',
-    kind: 'function',
-  },
-  {
-    label: 'panel',
-    detail: 'cad.panel(options)',
-    documentation:
-      'Создаёт плоскую панель. Может включать отверстия и профили кромок.',
-    insertText:
-      "panel({\n  width: ${1:120},\n  height: ${2:82},\n  thickness: ${3:3},\n  clearance: ${4:0.15},\n  edges: {\n    top: { kind: 'notches', count: ${5:2}, segmentLength: ${6:24} },\n    bottom: { kind: 'notches', count: ${7:2}, segmentLength: ${8:24} },\n    left: { kind: 'tabs', count: ${9:2}, segmentLength: ${10:18} },\n    right: { kind: 'tabs', count: ${11:2}, segmentLength: ${12:18} }\n  }\n})",
-    kind: 'function',
-  },
-  {
-    label: 'flatLayout',
-    detail: 'cad.flatLayout(parts, options)',
-    documentation: 'Раскладывает набор деталей в строки и столбцы.',
-    insertText:
-      'flatLayout({\n  ${1:front}: ${2:cad.panel({ width: 120, height: 80 })}\n}, { columns: ${3:2}, gapX: ${4:18}, gapY: ${5:18} })',
-    kind: 'function',
-  },
-  {
-    label: 'gear',
-    detail: 'cad.gear(options)',
-    documentation:
-      'Создаёт декоративную шестерню с настраиваемой шириной зуба и впадины.',
-    insertText:
-      'gear({\n  teeth: ${1:14},\n  outerRadius: ${2:34},\n  rootRadius: ${3:25},\n  bore: ${4:10}\n})',
-    kind: 'function',
-  },
-  {
-    label: 'clockFace',
-    detail: 'cad.clockFace(options)',
-    documentation:
-      'Создаёт циферблат с ободом, делениями и центральным отверстием.',
-    insertText:
-      'clockFace({\n  radius: ${1:42},\n  rimWidth: ${2:8},\n  tickCount: ${3:12},\n  centerHole: ${4:6}\n})',
-    kind: 'function',
-  },
-  {
-    label: 'trackPath',
-    detail: 'cad.trackPath(points, width, options?)',
-    documentation: 'Создаёт широкую дорожку по центральной линии.',
-    insertText:
-      'trackPath([\n  [${1:0}, ${2:0}],\n  [${3:60}, ${4:0}],\n  [${5:60}, ${6:30}]\n], ${7:10})',
-    kind: 'function',
-  },
-  {
-    label: 'sketch',
-    detail: 'cad.sketch(children)',
-    documentation:
-      'Создаёт корневой sketch, который обычно возвращается из кода.',
-    insertText: 'sketch({\n  ${1:part}: ${2:cad.rect(100, 60)}\n})',
-    kind: 'function',
-  },
-];
-
-const CAD_METHOD_COMPLETIONS: CompletionDefinition[] = [
-  {
-    label: 'centerAt',
-    detail: 'shape.centerAt([x, y])',
-    documentation:
-      'Ставит фигуру так, чтобы её центр оказался в указанной точке.',
-    insertText: 'centerAt([${1:x}, ${2:y}])',
-    kind: 'method',
-  },
-  {
-    label: 'moveTo',
-    detail: "shape.moveTo([x, y], 'anchor')",
-    documentation:
-      'Переносит выбранную опорную точку фигуры в указанное место.',
-    insertText: "moveTo([${1:x}, ${2:y}], '${3:center}')",
-    kind: 'method',
-  },
-  {
-    label: 'alignTo',
-    detail: "shape.alignTo(target, 'fromAnchor', 'toAnchor')",
-    documentation:
-      'Выравнивает опорную точку текущей фигуры по опорной точке цели.',
-    insertText: "alignTo(${1:target}, '${2:center}', '${3:center}')",
-    kind: 'method',
-  },
-  {
-    label: 'cut',
-    detail: 'shape.cut(other)',
-    documentation: 'Вычитает одну фигуру из другой.',
-    insertText: 'cut(${1:other})',
-    kind: 'method',
-  },
-  {
-    label: 'union',
-    detail: 'shape.union(other)',
-    documentation: 'Объединяет текущую фигуру с другой.',
-    insertText: 'union(${1:other})',
-    kind: 'method',
-  },
-  {
-    label: 'intersect',
-    detail: 'shape.intersect(other)',
-    documentation: 'Оставляет только область пересечения двух фигур.',
-    insertText: 'intersect(${1:other})',
-    kind: 'method',
-  },
-  {
-    label: 'polarArray',
-    detail: 'shape.polarArray(count, angleStepDeg, options?)',
-    documentation: 'Повторяет фигуру по окружности.',
-    insertText:
-      'polarArray(${1:count}, ${2:angleStepDeg}, { radius: ${3:40}, rotateItems: ${4:true} })',
-    kind: 'method',
-  },
-  {
-    label: 'onLayer',
-    detail: "shape.onLayer('cut')",
-    documentation: 'Назначает слой Maker.js для итоговой геометрии.',
-    insertText: "onLayer('${1:cut}')",
-    kind: 'method',
-  },
-];
 
 export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
   {
@@ -437,12 +313,12 @@ export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
   },
   {
     label: 'cad scene',
-    detail: 'Небольшая сцена',
+    detail: 'Небольшая раскладка',
     documentation:
-      'Вставляет компактную сцену с базой, дверцей, часами, дорожкой и фигурой.',
-    insertText: getCadSnippetEditorCode('defaultEditorScene'),
+      'Вставляет компактную раскладку нескольких деталей через cad.flatLayout.',
+    insertText: getCadSnippetEditorCode('editorFlatScene'),
     kind: 'snippet',
-    snippetId: 'defaultEditorScene',
+    snippetId: 'editorFlatScene',
   },
   {
     label: 'cad panel',
@@ -460,6 +336,60 @@ export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
     insertText: getCadSnippetEditorCode('helperFlatLayout'),
     kind: 'snippet',
     snippetId: 'helperFlatLayout',
+  },
+  {
+    label: 'cad demo mounting plate',
+    detail: 'MVP scene: single part',
+    documentation:
+      'Inserts a compact fabrication plate with holes, a slot, and a cutout.',
+    insertText: getCadSnippetEditorCode('demoMountingPlate'),
+    kind: 'snippet',
+    snippetId: 'demoMountingPlate',
+  },
+  {
+    label: 'cad demo rail pack',
+    detail: 'MVP scene: rotation matters',
+    documentation:
+      'Inserts a narrow-stock nesting scene with long rails that benefit from rotation.',
+    insertText: getCadSnippetEditorCode('demoRailPack'),
+    kind: 'snippet',
+    snippetId: 'demoRailPack',
+  },
+  {
+    label: 'cad demo tray inserts',
+    detail: 'MVP scene: concave parts',
+    documentation:
+      'Inserts a nesting scene with concave tray inserts and filler parts.',
+    insertText: getCadSnippetEditorCode('demoTrayInserts'),
+    kind: 'snippet',
+    snippetId: 'demoTrayInserts',
+  },
+  {
+    label: 'cad demo frame insert',
+    detail: 'MVP scene: part in hole',
+    documentation:
+      'Inserts a nesting scene where one part can fit inside another part opening.',
+    insertText: getCadSnippetEditorCode('demoFrameInsert'),
+    kind: 'snippet',
+    snippetId: 'demoFrameInsert',
+  },
+  {
+    label: 'cad demo perforated sheet',
+    detail: 'MVP scene: target holes',
+    documentation:
+      'Inserts a perforated stock sheet where target holes must stay forbidden.',
+    insertText: getCadSnippetEditorCode('demoPerforatedSheet'),
+    kind: 'snippet',
+    snippetId: 'demoPerforatedSheet',
+  },
+  {
+    label: 'cad demo rounded mix',
+    detail: 'MVP scene: curved parts',
+    documentation:
+      'Inserts a curved mixed-parts nesting scene in a rounded target.',
+    insertText: getCadSnippetEditorCode('demoRoundedMix'),
+    kind: 'snippet',
+    snippetId: 'demoRoundedMix',
   },
   {
     label: 'cad gear',
@@ -488,8 +418,22 @@ export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
   },
 ];
 
-let extraLibDisposable: DisposableLike | null = null;
-let completionDisposable: DisposableLike | null = null;
+const getCadEditorEnhancementState = (): CadEditorEnhancementState => {
+  const globalState = globalThis as typeof globalThis & {
+    [CAD_EDITOR_ENHANCEMENT_STATE_KEY]?: CadEditorEnhancementState;
+  };
+
+  if (!globalState[CAD_EDITOR_ENHANCEMENT_STATE_KEY]) {
+    globalState[CAD_EDITOR_ENHANCEMENT_STATE_KEY] = {
+      owner: null,
+      monaco: null,
+      extraLibDisposable: null,
+      completionDisposable: null,
+    };
+  }
+
+  return globalState[CAD_EDITOR_ENHANCEMENT_STATE_KEY];
+};
 
 const toCompletionKind = (
   monaco: MonacoEditorApi,
@@ -532,20 +476,48 @@ const linePrefixEndsWithDot = (linePrefix: string): boolean =>
 const linePrefixTargetsCadFactories = (linePrefix: string): boolean =>
   /cad\.[\w$]*$/.test(linePrefix);
 
+const linePrefixTargetsCadSnippets = (linePrefix: string): boolean => {
+  const trimmedPrefix = linePrefix.trimStart();
+
+  return trimmedPrefix.length === 0 || /\bcad[\w-]*$/i.test(trimmedPrefix);
+};
+
+const disposeCadEditorEnhancements = (): void => {
+  const state = getCadEditorEnhancementState();
+
+  state.completionDisposable?.dispose();
+  state.extraLibDisposable?.dispose();
+  state.completionDisposable = null;
+  state.extraLibDisposable = null;
+  state.monaco = null;
+};
+
 export const configureCadEditor = (monaco: MonacoEditorApi): void => {
-  if (!extraLibDisposable) {
-    extraLibDisposable =
-      monaco.languages.typescript.javascriptDefaults.addExtraLib(
-        CAD_EDITOR_EXTRA_LIB,
-        CAD_EDITOR_EXTRA_LIB_PATH
-      );
+  const state = getCadEditorEnhancementState();
+
+  if (
+    state.owner !== CAD_EDITOR_MODULE_TOKEN ||
+    (state.monaco !== null && state.monaco !== monaco)
+  ) {
+    disposeCadEditorEnhancements();
+    state.owner = CAD_EDITOR_MODULE_TOKEN;
   }
 
-  if (completionDisposable) {
+  if (
+    state.monaco === monaco &&
+    state.extraLibDisposable &&
+    state.completionDisposable
+  ) {
     return;
   }
 
-  completionDisposable = monaco.languages.registerCompletionItemProvider(
+  state.extraLibDisposable =
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(
+      CAD_EDITOR_EXTRA_LIB,
+      CAD_EDITOR_EXTRA_LIB_PATH
+    );
+
+  state.completionDisposable = monaco.languages.registerCompletionItemProvider(
     'javascript',
     {
       triggerCharacters: ['.'],
@@ -561,24 +533,12 @@ export const configureCadEditor = (monaco: MonacoEditorApi): void => {
           .getLineContent(position.lineNumber)
           .slice(0, position.column - 1);
 
-        if (linePrefixTargetsCadFactories(linePrefix)) {
-          return {
-            suggestions: createCompletionItems(
-              monaco,
-              range,
-              CAD_FACTORY_COMPLETIONS
-            ),
-          };
-        }
-
-        if (linePrefixEndsWithDot(linePrefix)) {
-          return {
-            suggestions: createCompletionItems(
-              monaco,
-              range,
-              CAD_METHOD_COMPLETIONS
-            ),
-          };
+        if (
+          linePrefixTargetsCadFactories(linePrefix) ||
+          linePrefixEndsWithDot(linePrefix) ||
+          !linePrefixTargetsCadSnippets(linePrefix)
+        ) {
+          return { suggestions: [] };
         }
 
         return {
@@ -591,11 +551,16 @@ export const configureCadEditor = (monaco: MonacoEditorApi): void => {
       },
     }
   );
+  state.monaco = monaco;
 };
 
 export const resetCadEditorEnhancementsForTest = (): void => {
-  completionDisposable?.dispose();
-  extraLibDisposable?.dispose();
-  completionDisposable = null;
-  extraLibDisposable = null;
+  const state = getCadEditorEnhancementState();
+  const globalState = globalThis as typeof globalThis & {
+    [CAD_EDITOR_ENHANCEMENT_STATE_KEY]?: CadEditorEnhancementState;
+  };
+
+  disposeCadEditorEnhancements();
+  state.owner = null;
+  delete globalState[CAD_EDITOR_ENHANCEMENT_STATE_KEY];
 };
