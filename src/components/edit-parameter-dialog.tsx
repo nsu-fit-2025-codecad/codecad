@@ -44,8 +44,7 @@ const editParameterFormSchema = (
         'Cannot use reserved JavaScript keyword'
       )
       .refine(
-        (name) =>
-          name === originalName || !existingNames.includes(name),
+        (name) => name === originalName || !existingNames.includes(name),
         'Parameter with this name already exists'
       ),
     value: z.coerce.number<number>(),
@@ -65,10 +64,7 @@ export const EditParameterDialog = ({
 
   const form = useForm({
     resolver: zodResolver(
-      editParameterFormSchema(
-        existingNames,
-        parameter?.name ?? ''
-      )
+      editParameterFormSchema(existingNames, parameter?.name ?? '')
     ),
     defaultValues: {
       name: '',
