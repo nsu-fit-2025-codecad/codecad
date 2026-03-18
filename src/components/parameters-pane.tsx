@@ -1,11 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Field,
-  FieldDescription,
   FieldSet,
-  FieldTitle,
 } from '@/components/ui/field';
-import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddParameterDialog } from '@/components/add-parameter-dialog';
