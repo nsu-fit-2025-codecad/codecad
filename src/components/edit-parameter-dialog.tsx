@@ -83,7 +83,7 @@ export const EditParameterDialog = ({
     if (parameter) {
       form.reset(parameter);
     }
-  }, [parameter]);
+  }, [parameter, form]);
 
   function onSubmit(data: EditParameterFormData) {
     if (!parameter) return;
