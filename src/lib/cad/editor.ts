@@ -347,6 +347,15 @@ export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
     snippetId: 'demoMountingPlate',
   },
   {
+    label: 'cad demo box parts',
+    detail: 'MVP scene: flat box layout',
+    documentation:
+      'Inserts a simple six-part box layout with tabs, notches, and a lid handle.',
+    insertText: getCadSnippetEditorCode('demoBoxParts'),
+    kind: 'snippet',
+    snippetId: 'demoBoxParts',
+  },
+  {
     label: 'cad demo rail pack',
     detail: 'MVP scene: rotation matters',
     documentation:

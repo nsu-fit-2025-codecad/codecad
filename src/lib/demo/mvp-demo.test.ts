@@ -9,13 +9,14 @@ import {
 } from '@/lib/demo/mvp-demo';
 
 describe('MVP demo configuration', () => {
-  it('defines exactly five demo scenes with unique English titles', () => {
-    expect(MVP_DEMO_SCENES).toHaveLength(6);
+  it('defines exactly seven demo scenes with unique English titles', () => {
+    expect(MVP_DEMO_SCENES).toHaveLength(7);
 
     const titles = MVP_DEMO_SCENES.map((scene) => scene.title);
 
     expect(titles).toEqual([
       'Mounting Plate',
+      'Box Parts',
       'Rail Pack',
       'Tray Inserts',
       'Frame Insert',
@@ -25,14 +26,17 @@ describe('MVP demo configuration', () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it('keeps one DSL scene and five nesting scenes', () => {
+  it('keeps two DSL scenes and five nesting scenes', () => {
     const dslScenes = MVP_DEMO_SCENES.filter((scene) => scene.kind === 'dsl');
     const nestingScenes = MVP_DEMO_SCENES.filter(
       (scene) => scene.kind === 'nesting'
     );
 
-    expect(dslScenes).toHaveLength(1);
-    expect(dslScenes[0].id).toBe('mountingPlate');
+    expect(dslScenes).toHaveLength(2);
+    expect(dslScenes.map((scene) => scene.id)).toEqual([
+      'mountingPlate',
+      'boxParts',
+    ]);
     expect(nestingScenes).toHaveLength(5);
     nestingScenes.forEach((scene) => {
       expect(scene.recommendedTargetModelId).toBe('target');
@@ -70,6 +74,7 @@ describe('MVP demo configuration', () => {
     expect(getMvpDemoScene('railPack').kind).toBe('nesting');
     expect(getMvpDemoScene('frameInsert').kind).toBe('nesting');
     expect(getMvpDemoScene('mountingPlate').kind).toBe('dsl');
+    expect(getMvpDemoScene('boxParts').kind).toBe('dsl');
 
     const standard = normalizePackingOptions(
       getMvpDemoNestingPreset('standard').options

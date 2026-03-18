@@ -406,6 +406,84 @@ return cad.flatLayout(
       { name: 'windowHeight', value: 30, min: 18, max: 60, step: 1 },
     ]
   ),
+  demoBoxParts: withParameters(
+    defineSnippet(
+      'Box Parts',
+      `function wallPanel(width, sideKind) {
+  return cad.panel({
+    width,
+    height: boxHeight,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'notches', count: 3, segmentLength: tabLength, inset: 8 },
+      bottom: { kind: 'notches', count: 3, segmentLength: tabLength, inset: 8 },
+      left: { kind: sideKind, count: 2, segmentLength: sideTabLength, inset: 10 },
+      right: { kind: sideKind, count: 2, segmentLength: sideTabLength, inset: 10 }
+    }
+  });
+}
+
+function horizontalPanel(withHandle) {
+  let panel = cad.panel({
+    width: boxWidth,
+    height: boxDepth,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'tabs', count: 3, segmentLength: tabLength, inset: 8 },
+      bottom: { kind: 'tabs', count: 3, segmentLength: tabLength, inset: 8 },
+      left: { kind: 'tabs', count: 2, segmentLength: sideTabLength, inset: 10 },
+      right: { kind: 'tabs', count: 2, segmentLength: sideTabLength, inset: 10 }
+    }
+  });
+
+  if (withHandle) {
+    panel = panel
+      .cut(cad.slot(handleLength, 12).centerAt([boxWidth / 2, 24]))
+      .cut(cad.slot(44, 6).centerAt([boxWidth * 0.25, boxDepth - 12]))
+      .cut(cad.slot(44, 6).centerAt([boxWidth * 0.75, boxDepth - 12]));
+  }
+
+  return panel;
+}
+
+const front = wallPanel(boxWidth, 'tabs')
+  .cut(cad.slot(handleLength - 4, 8).centerAt([boxWidth / 2, boxHeight - 12]))
+  .onLayer('cut');
+
+const back = wallPanel(boxWidth, 'tabs').onLayer('cut');
+const leftSide = wallPanel(boxDepth, 'notches').onLayer('cut');
+const rightSide = wallPanel(boxDepth, 'notches')
+  .cut(cad.slot(44, 10).centerAt([boxDepth / 2, 24]))
+  .onLayer('cut');
+
+const bottom = horizontalPanel(false).onLayer('cut');
+const lid = horizontalPanel(true).onLayer('cut');
+
+return cad.flatLayout(
+  {
+    front,
+    back,
+    leftSide,
+    rightSide,
+    bottom,
+    lid
+  },
+  { columns: 2, gapX: 20, gapY: 20 }
+);`
+    ),
+    [
+      { name: 'thickness', value: 3, min: 1, max: 12, step: 1 },
+      { name: 'clearance', value: 0.15, min: 0, max: 1, step: 0.05 },
+      { name: 'boxWidth', value: 168, min: 100, max: 280, step: 1 },
+      { name: 'boxDepth', value: 112, min: 80, max: 220, step: 1 },
+      { name: 'boxHeight', value: 96, min: 60, max: 180, step: 1 },
+      { name: 'tabLength', value: 24, min: 14, max: 40, step: 1 },
+      { name: 'sideTabLength', value: 18, min: 12, max: 32, step: 1 },
+      { name: 'handleLength', value: 56, min: 32, max: 96, step: 1 },
+    ]
+  ),
   demoRailPack: withParameters(
     defineSnippet(
       'Rail Pack',
