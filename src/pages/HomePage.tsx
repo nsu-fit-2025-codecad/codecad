@@ -210,7 +210,6 @@ export const HomePage = () => {
       {isParametersPaneOpen && (
         <ParametersPane
           className="fixed right-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
-          onParametersEdit={() => {}}
           onClose={closeParametersPane}
         />
       )}
