@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Field,
-  FieldDescription,
   FieldSet,
   FieldTitle,
 } from '@/components/ui/field';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddParameterDialog } from '@/components/add-parameter-dialog';
@@ -50,6 +50,7 @@ export const ParametersPane = ({
         <CardContent>
           <FieldSet>
             {parameters.map((parameter) => (
+<<<<<<< HEAD
               <Field
                 key={parameter.name}
                 orientation="horizontal"
@@ -71,6 +72,47 @@ export const ParametersPane = ({
                   step={parameter.step}
                   className="w-full flex-1"
                 />
+=======
+              <Field key={parameter.name}>
+                <FieldTitle>{parameter.name}</FieldTitle>
+                <div className="mt-2 flex items-center gap-3">
+                  <Input
+                    type="number"
+                    value={parameter.value}
+                    min={parameter.min}
+                    max={parameter.max}
+                    step={parameter.step}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') return;
+
+                      const num = Number(val);
+
+                      const min = parameter.min ?? -Infinity;
+                      const max = parameter.max ?? Infinity;
+
+                      const clamped = Math.min(
+                        max,
+                        Math.max(min, num)
+                      );
+
+                      updateValue(parameter.name, clamped);
+                    }}
+                    className="w-24"
+                  />
+
+                  <Slider
+                    value={[parameter.value]}
+                    onValueChange={(values) =>
+                      updateValue(parameter.name, values[0])
+                    }
+                    min={parameter.min}
+                    max={parameter.max}
+                    step={parameter.step}
+                    className="flex-1"
+                  />
+                </div>
+>>>>>>> 732173c (feat(parameters): added presise input and changed orientatione to horizontal)
               </Field>
             ))}
           </FieldSet>
