@@ -8,10 +8,6 @@ import type { Parameter } from '@/store/store';
 
 export type MvpDemoSceneId =
   | 'mountingPlate'
-  | 'bottleCarrierKit'
-  | 'fanGuardPack'
-  | 'connectorPanelBatch'
-  | 'hookRackSet'
   | 'railPack'
   | 'trayInserts'
   | 'frameInsert'
@@ -81,18 +77,6 @@ const createNestingScene = (
 
 export const MVP_DEMO_SCENES: MvpDemoScene[] = [
   createDslScene('mountingPlate', 'Mounting Plate', 'demoMountingPlate'),
-  createNestingScene(
-    'bottleCarrierKit',
-    'Bottle Carrier Kit',
-    'demoBottleCarrierKit'
-  ),
-  createNestingScene('fanGuardPack', 'Fan Guard Pack', 'demoFanGuardPack'),
-  createNestingScene(
-    'connectorPanelBatch',
-    'Connector Panel Batch',
-    'demoConnectorPanelBatch'
-  ),
-  createNestingScene('hookRackSet', 'Hook Rack Set', 'demoHookRackSet'),
   createNestingScene('railPack', 'Rail Pack', 'demoRailPack'),
   createNestingScene('trayInserts', 'Tray Inserts', 'demoTrayInserts'),
   createNestingScene('frameInsert', 'Frame Insert', 'demoFrameInsert'),

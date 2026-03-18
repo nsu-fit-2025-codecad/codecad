@@ -28,7 +28,7 @@ export const MvpDemoPanel = ({
   onPrepareNestingPreset,
   className,
 }: MvpDemoPanelProps) => (
-  <Card className={cn('flex min-h-0 flex-col overflow-hidden', className)}>
+  <Card className={cn('overflow-hidden', className)}>
     <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
       <CardTitle className="flex items-center gap-2 text-base">
         <Shapes className="size-4" />
@@ -44,7 +44,7 @@ export const MvpDemoPanel = ({
         <X />
       </Button>
     </CardHeader>
-    <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+    <CardContent className="space-y-2">
       {MVP_DEMO_SCENES.map((scene) => {
         const isActive = scene.id === activeSceneId;
         const canUsePresets = scene.kind === 'nesting' && isActive;
