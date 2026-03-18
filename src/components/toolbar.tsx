@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
-import { Boxes, Package, SlidersHorizontal } from 'lucide-react';
+import { Boxes, Package, Shapes, SlidersHorizontal } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
@@ -66,12 +66,11 @@ export const Toolbar = ({
           variant={isDemoGuideOpen ? 'default' : 'outline'}
           onClick={onToggleDemoGuide}
           className="cursor-pointer"
-          size="sm"
-          title={
-            isDemoGuideOpen ? 'Close MVP demo guide' : 'Open MVP demo guide'
-          }
+          size="icon"
+          aria-label={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
+          title={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
         >
-          MVP
+          <Shapes />
         </Button>
         <ThemeToggle />
       </CardContent>

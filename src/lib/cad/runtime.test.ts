@@ -432,6 +432,25 @@ describe('cad shape helpers', () => {
     ]);
   });
 
+  it('keeps named ids when flatLayout expands grouped arrays', () => {
+    const sketch = cad.flatLayout(
+      {
+        target: cad.rect(100, 60),
+        rail: [cad.rect(18, 80), cad.rect(18, 72)],
+        bracket: cad.rect(40, 24),
+      },
+      { columns: 3, gapX: 12, gapY: 16 }
+    );
+    const model = normalizeEditorModelResult(sketch);
+
+    expect(Object.keys(model.models ?? {}).sort()).toEqual([
+      'bracket',
+      'rail1',
+      'rail2',
+      'target',
+    ]);
+  });
+
   it('uses assembly placement bounds for flat layout', () => {
     const decorated = new Assembly2D({
       kind: 'assembly',

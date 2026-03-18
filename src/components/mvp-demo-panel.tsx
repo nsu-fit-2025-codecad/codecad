@@ -8,7 +8,7 @@ import {
   type MvpDemoNestingPresetId,
   type MvpDemoSceneId,
 } from '@/lib/demo/mvp-demo';
-import { X } from 'lucide-react';
+import { Shapes, X } from 'lucide-react';
 
 interface MvpDemoPanelProps {
   activeSceneId: MvpDemoSceneId | null;
@@ -30,7 +30,10 @@ export const MvpDemoPanel = ({
 }: MvpDemoPanelProps) => (
   <Card className={cn('overflow-hidden', className)}>
     <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
-      <CardTitle className="text-base">MVP</CardTitle>
+      <CardTitle className="flex items-center gap-2 text-base">
+        <Shapes className="size-4" />
+        Demo
+      </CardTitle>
       <Button
         variant="ghost"
         size="icon"

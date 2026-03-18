@@ -390,9 +390,12 @@ return cad.flatLayout([plate, bracket, spacer], {
   .cut(cad.circle(6).centerAt([plateWidth / 2, plateHeight - 38]))
   .onLayer('cut');
 
-return cad.sketch({
-  mountingPlate
-});`
+return cad.flatLayout(
+  {
+    mountingPlate
+  },
+  { columns: 1, gapX: 0, gapY: 0 }
+);`
     ),
     [
       { name: 'plateWidth', value: 180, min: 120, max: 260, step: 1 },
@@ -442,13 +445,14 @@ const angleBracket = cad
   })
   .onLayer('cut');
 
-return cad.sketch({
-  target,
-  railA: railA.translate(270, 0),
-  railB: railB.translate(310, 0),
-  railC: railC.translate(350, 0),
-  angleBracket: angleBracket.translate(270, 150)
-});`
+return cad.flatLayout(
+  {
+    target,
+    rail: [railA, railB, railC],
+    angleBracket
+  },
+  { columns: 3, gapX: 28, gapY: 24 }
+);`
     ),
     [
       { name: 'stockWidth', value: 240, min: 180, max: 320, step: 1 },
@@ -485,14 +489,15 @@ const fillerA = cad.roundRect(fillerWidth, fillerHeight, 5).onLayer('cut');
 const fillerB = cad.rect(fillerWidth + 2, fillerHeight + 2).onLayer('cut');
 const latch = cad.capsule(latchLength, 18).onLayer('cut');
 
-return cad.sketch({
-  target,
-  trayLeft: trayLeft.translate(215, 0),
-  trayRight: trayRight.translate(315, 0),
-  fillerA: fillerA.translate(215, 88),
-  fillerB: fillerB.translate(260, 88),
-  latch: latch.translate(310, 90)
-});`
+return cad.flatLayout(
+  {
+    target,
+    tray: [trayLeft, trayRight],
+    filler: [fillerA, fillerB],
+    latch
+  },
+  { columns: 3, gapX: 22, gapY: 20 }
+);`
     ),
     [
       { name: 'stockWidth', value: 190, min: 150, max: 260, step: 1 },
@@ -526,14 +531,17 @@ const cap = cad
   .cut(cad.circle(8).centerAt([17, 17]))
   .onLayer('cut');
 
-return cad.sketch({
-  target,
-  frame: frame.translate(250, 0),
-  insert: insert.translate(250, 110),
-  latch: latch.translate(340, 110),
-  shim: shim.translate(410, 112),
-  cap: cap.translate(470, 104)
-});`
+return cad.flatLayout(
+  {
+    target,
+    frame,
+    insert,
+    latch,
+    shim,
+    cap
+  },
+  { columns: 3, gapX: 22, gapY: 20 }
+);`
     ),
     [
       { name: 'stockWidth', value: 220, min: 180, max: 300, step: 1 },
@@ -599,14 +607,16 @@ const anchor = cad
   .cut(cad.circle(8).centerAt([23, 23]))
   .onLayer('cut');
 
-return cad.sketch({
-  target,
-  coverA: coverA.translate(310, 0),
-  coverB: coverB.translate(310, 70),
-  handle: handle.translate(310, 140),
-  brace: brace.translate(415, 0),
-  anchor: anchor.translate(415, 48)
-});`
+return cad.flatLayout(
+  {
+    target,
+    cover: [coverA, coverB],
+    handle,
+    brace,
+    anchor
+  },
+  { columns: 3, gapX: 22, gapY: 20 }
+);`
     ),
     [
       { name: 'sheetWidth', value: 280, min: 220, max: 340, step: 1 },
@@ -655,15 +665,18 @@ const arcBrace = cad
   .cut(cad.slot(handleLength - 70, 8).centerAt([(handleLength - 26) / 2, 13]))
   .onLayer('cut');
 
-return cad.sketch({
-  target,
-  handle: handle.translate(280, 0),
-  motorPlate: motorPlate.translate(280, 60),
-  sensorBracket: sensorBracket.translate(380, 60),
-  sealPad: sealPad.translate(280, 140),
-  spacerRing: spacerRing.translate(360, 140),
-  arcBrace: arcBrace.translate(410, 0)
-});`
+return cad.flatLayout(
+  {
+    target,
+    handle,
+    motorPlate,
+    sensorBracket,
+    sealPad,
+    spacerRing,
+    arcBrace
+  },
+  { columns: 3, gapX: 24, gapY: 20 }
+);`
     ),
     [
       { name: 'stockWidth', value: 250, min: 200, max: 320, step: 1 },

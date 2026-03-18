@@ -46,7 +46,7 @@ describe('MVP demo configuration', () => {
         getCadSnippet(scene.snippetId).parameters
       );
       expect(scene.parameters.length).toBeGreaterThan(0);
-      expect(scene.code).toContain('return cad.sketch');
+      expect(scene.code).toContain('return cad.flatLayout');
     });
   });
 
