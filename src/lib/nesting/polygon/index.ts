@@ -2,6 +2,7 @@ export * from './types';
 export * from './point-utils';
 export * from './polygon-math';
 export * from './polygon-cleanup';
+export * from './hole-regions';
 export * from './polygon-offset';
 export * from './polygon-boolean';
 export * from './makerjs-to-polygons';

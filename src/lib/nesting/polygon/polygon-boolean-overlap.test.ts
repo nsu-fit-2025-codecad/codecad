@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isShapeInsideBin,
   polygonsOverlap,
   pointInPolygon,
 } from '@/lib/nesting/polygon/polygon-boolean';
@@ -9,6 +10,18 @@ import {
   translateShape,
 } from '@/lib/nesting/polygon/polygon-math';
 import type { PolygonShape } from '@/lib/nesting/polygon/types';
+
+const rectangleShape = (width: number, height: number): PolygonShape =>
+  normalizeShape(
+    createShape([
+      [
+        { x: 0, y: 0 },
+        { x: width, y: 0 },
+        { x: width, y: height },
+        { x: 0, y: height },
+      ],
+    ])
+  );
 
 const cShapeContour = (
   width: number,
@@ -105,5 +118,27 @@ describe('polygonsOverlap with concave/holed shapes', () => {
 
     const placed = translateShape(rect, 40, 40);
     expect(polygonsOverlap(placed, frame, 0)).toBe(false);
+  });
+
+  it('rejects candidate shapes that cover a target hole with their interior', () => {
+    const target = frameShape(100, 100, 30, 30, 40, 40);
+    const candidate = translateShape(rectangleShape(50, 50), 25, 25);
+
+    expect(isShapeInsideBin(candidate, target, 0)).toBe(false);
+  });
+
+  it('allows candidate shapes that stay outside the target hole', () => {
+    const target = frameShape(100, 100, 30, 30, 40, 40);
+    const candidate = translateShape(rectangleShape(20, 20), 5, 5);
+
+    expect(isShapeInsideBin(candidate, target, 0)).toBe(true);
+  });
+
+  it('shrinks usable space near target holes when gap increases', () => {
+    const target = frameShape(100, 100, 30, 30, 40, 40);
+    const candidate = translateShape(rectangleShape(10, 10), 19, 35);
+
+    expect(isShapeInsideBin(candidate, target, 0)).toBe(true);
+    expect(isShapeInsideBin(candidate, target, 2)).toBe(false);
   });
 });

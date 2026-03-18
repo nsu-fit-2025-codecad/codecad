@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import makerjs from 'makerjs';
+import { extractHoleRegions } from '@/lib/nesting/polygon/hole-regions';
 import {
   isShapeInsideBin,
   polygonsOverlap,
@@ -656,6 +657,37 @@ describe('placePartsGreedy', () => {
 
     expect(result.notPlacedIds).toHaveLength(0);
     expect(result.placements).toHaveLength(2);
+  });
+
+  it('does not place parts over hole regions in the target bin', () => {
+    const bin = frameShape(100, 100, 30, 30, 40, 40);
+    const parts = [
+      rectanglePart('large', 50, 50),
+      rectanglePart('small', 20, 20),
+    ];
+
+    const result = placePartsGreedy(parts, bin, {
+      gap: 0,
+      rotations: [0],
+      curveTolerance: 1,
+    });
+    const targetHoleRegions = extractHoleRegions(bin);
+
+    expect(
+      result.placements.some((placement) => placement.id === 'small')
+    ).toBe(true);
+    expect(
+      result.placements.some((placement) => placement.id === 'large')
+    ).toBe(false);
+    expect(result.notPlacedIds).toContain('large');
+
+    result.placements.forEach((placement) => {
+      targetHoleRegions.forEach((holeRegion) => {
+        expect(polygonsOverlap(placement.shape, holeRegion.shape, 0)).toBe(
+          false
+        );
+      });
+    });
   });
 
   it('places insert in diamond-shaped hole using interior anchor when boundary candidates are taken', () => {

@@ -1,5 +1,6 @@
 import { buildInnerFitPolygon, buildNoFitPolygon } from '@/lib/nesting/nfp/nfp';
 import { NfpCache } from '@/lib/nesting/nfp/nfp-cache';
+import { extractHoleRegions } from '@/lib/nesting/polygon/hole-regions';
 import { translateShape } from '@/lib/nesting/polygon/polygon-math';
 import {
   dedupePoints,
@@ -7,10 +8,7 @@ import {
   limitCandidatePoints,
   pairwiseVertexCandidates,
 } from '@/lib/nesting/placement/place-candidates';
-import {
-  buildHoleCandidatePoints,
-  extractHoleRegions,
-} from '@/lib/nesting/placement/place-hole-candidates';
+import { buildHoleCandidatePoints } from '@/lib/nesting/placement/place-hole-candidates';
 import {
   isBetterCandidate,
   scorePlacement,
