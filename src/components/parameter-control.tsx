@@ -14,7 +14,7 @@ type ParameterControlProps = {
 export const ParameterControl = ({
   parameter,
   updateValue,
-  onEdit
+  onEdit,
 }: ParameterControlProps) => {
   const [inputValue, setInputValue] = React.useState(String(parameter.value));
 
@@ -60,12 +60,8 @@ export const ParameterControl = ({
           className="flex-1"
         />
 
-        <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => onEdit(parameter)}
-        >
-            Edit
+        <Button size="icon" variant="ghost" onClick={() => onEdit(parameter)}>
+          Edit
         </Button>
       </div>
     </Field>

@@ -15,13 +15,12 @@ interface ParametersPaneProps {
   className?: string;
 }
 
-export const ParametersPane = ({
-  onClose,
-  className,
-}: ParametersPaneProps) => {
+export const ParametersPane = ({ onClose, className }: ParametersPaneProps) => {
   const { parameters, updateValue } = useParametersStore();
 
-  const [editingParameter, setEditingParameter] = useState<Parameter | null>(null);
+  const [editingParameter, setEditingParameter] = useState<Parameter | null>(
+    null
+  );
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   return (
