@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Field, FieldTitle, FieldDescription } from '@/components/ui/field';
 import { Slider } from '@/components/ui/slider';
@@ -10,13 +9,11 @@ type ParameterControlProps = {
   updateValue: (name: string, value: number) => void;
 };
 
-export const ParameterControl = ({ 
-    parameter, 
-    updateValue,
- }: ParameterControlProps) => {
-  const [inputValue, setInputValue] = React.useState(
-    String(parameter.value)
-  );
+export const ParameterControl = ({
+  parameter,
+  updateValue,
+}: ParameterControlProps) => {
+  const [inputValue, setInputValue] = React.useState(String(parameter.value));
 
   React.useEffect(() => {
     setInputValue(String(parameter.value));
@@ -54,9 +51,7 @@ export const ParameterControl = ({
 
         <Slider
           value={[parameter.value]}
-          onValueChange={(values) =>
-            updateValue(parameter.name, values[0])
-          }
+          onValueChange={(values) => updateValue(parameter.name, values[0])}
           min={parameter.min}
           max={parameter.max}
           step={parameter.step}
