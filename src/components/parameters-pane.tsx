@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddParameterDialog } from '@/components/add-parameter-dialog';
+import { ParameterControl } from '@/components/parameter-control';
 import { Button } from '@/components/ui/button';
 import { useParametersStore } from '@/store/store';
 import { X } from 'lucide-react';
@@ -50,6 +51,7 @@ export const ParametersPane = ({
         <CardContent>
           <FieldSet>
             {parameters.map((parameter) => (
+<<<<<<< HEAD
 <<<<<<< HEAD
               <Field
                 key={parameter.name}
@@ -114,6 +116,13 @@ export const ParametersPane = ({
                 </div>
 >>>>>>> 732173c (feat(parameters): added presise input and changed orientatione to horizontal)
               </Field>
+=======
+              <ParameterControl
+                key={parameter.name}
+                parameter={parameter}
+                updateValue={updateValue}
+              />
+>>>>>>> 6228125 (feat(parameters): added keyboard input for parameters)
             ))}
           </FieldSet>
         </CardContent>
