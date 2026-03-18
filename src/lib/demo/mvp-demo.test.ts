@@ -9,13 +9,17 @@ import {
 } from '@/lib/demo/mvp-demo';
 
 describe('MVP demo configuration', () => {
-  it('defines exactly five demo scenes with unique English titles', () => {
-    expect(MVP_DEMO_SCENES).toHaveLength(6);
+  it('defines exactly ten demo scenes with unique English titles', () => {
+    expect(MVP_DEMO_SCENES).toHaveLength(10);
 
     const titles = MVP_DEMO_SCENES.map((scene) => scene.title);
 
     expect(titles).toEqual([
       'Mounting Plate',
+      'Bottle Carrier Kit',
+      'Fan Guard Pack',
+      'Connector Panel Batch',
+      'Hook Rack Set',
       'Rail Pack',
       'Tray Inserts',
       'Frame Insert',
@@ -25,7 +29,7 @@ describe('MVP demo configuration', () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it('keeps one DSL scene and five nesting scenes', () => {
+  it('keeps one DSL scene and nine nesting scenes', () => {
     const dslScenes = MVP_DEMO_SCENES.filter((scene) => scene.kind === 'dsl');
     const nestingScenes = MVP_DEMO_SCENES.filter(
       (scene) => scene.kind === 'nesting'
@@ -33,7 +37,7 @@ describe('MVP demo configuration', () => {
 
     expect(dslScenes).toHaveLength(1);
     expect(dslScenes[0].id).toBe('mountingPlate');
-    expect(nestingScenes).toHaveLength(5);
+    expect(nestingScenes).toHaveLength(9);
     nestingScenes.forEach((scene) => {
       expect(scene.recommendedTargetModelId).toBe('target');
     });
@@ -67,6 +71,10 @@ describe('MVP demo configuration', () => {
   });
 
   it('keeps preset options normalized and scene lookup stable', () => {
+    expect(getMvpDemoScene('bottleCarrierKit').kind).toBe('nesting');
+    expect(getMvpDemoScene('fanGuardPack').kind).toBe('nesting');
+    expect(getMvpDemoScene('connectorPanelBatch').kind).toBe('nesting');
+    expect(getMvpDemoScene('hookRackSet').kind).toBe('nesting');
     expect(getMvpDemoScene('railPack').kind).toBe('nesting');
     expect(getMvpDemoScene('frameInsert').kind).toBe('nesting');
     expect(getMvpDemoScene('mountingPlate').kind).toBe('dsl');

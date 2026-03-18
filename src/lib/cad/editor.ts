@@ -347,6 +347,42 @@ export const CAD_EDITOR_SNIPPETS: CompletionDefinition[] = [
     snippetId: 'demoMountingPlate',
   },
   {
+    label: 'cad demo bottle carrier kit',
+    detail: 'MVP scene: slotted carrier',
+    documentation:
+      'Inserts a bottle carrier nesting scene with concave sides, dividers, and a handle.',
+    insertText: getCadSnippetEditorCode('demoBottleCarrierKit'),
+    kind: 'snippet',
+    snippetId: 'demoBottleCarrierKit',
+  },
+  {
+    label: 'cad demo fan guard pack',
+    detail: 'MVP scene: curved ring pack',
+    documentation:
+      'Inserts a curved nesting scene with fan guards, clips, and caps that can fit inside ring holes.',
+    insertText: getCadSnippetEditorCode('demoFanGuardPack'),
+    kind: 'snippet',
+    snippetId: 'demoFanGuardPack',
+  },
+  {
+    label: 'cad demo connector panel batch',
+    detail: 'MVP scene: production batch',
+    documentation:
+      'Inserts a production-style batch of connector faceplates with varied cutouts.',
+    insertText: getCadSnippetEditorCode('demoConnectorPanelBatch'),
+    kind: 'snippet',
+    snippetId: 'demoConnectorPanelBatch',
+  },
+  {
+    label: 'cad demo hook rack set',
+    detail: 'MVP scene: hooked parts',
+    documentation:
+      'Inserts a hook-and-hanger nesting scene where rotation has a visible impact.',
+    insertText: getCadSnippetEditorCode('demoHookRackSet'),
+    kind: 'snippet',
+    snippetId: 'demoHookRackSet',
+  },
+  {
     label: 'cad demo rail pack',
     detail: 'MVP scene: rotation matters',
     documentation:
