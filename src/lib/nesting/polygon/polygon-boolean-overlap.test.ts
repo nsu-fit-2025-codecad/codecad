@@ -141,4 +141,32 @@ describe('polygonsOverlap with concave/holed shapes', () => {
     expect(isShapeInsideBin(candidate, target, 0)).toBe(true);
     expect(isShapeInsideBin(candidate, target, 2)).toBe(false);
   });
+
+  it('allows placement on a material island nested inside a target hole', () => {
+    const target = normalizeShape(
+      createShape([
+        [
+          { x: 0, y: 0 },
+          { x: 200, y: 0 },
+          { x: 200, y: 200 },
+          { x: 0, y: 200 },
+        ],
+        [
+          { x: 20, y: 20 },
+          { x: 180, y: 20 },
+          { x: 180, y: 180 },
+          { x: 20, y: 180 },
+        ],
+        [
+          { x: 70, y: 70 },
+          { x: 130, y: 70 },
+          { x: 130, y: 130 },
+          { x: 70, y: 130 },
+        ],
+      ])
+    );
+    const candidate = translateShape(rectangleShape(20, 20), 90, 90);
+
+    expect(isShapeInsideBin(candidate, target, 0)).toBe(true);
+  });
 });

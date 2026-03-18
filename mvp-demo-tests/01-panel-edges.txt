@@ -1,0 +1,38 @@
+MVP demo 01: panel with fabrication edges
+
+Goal
+- Show that the high-level DSL can describe a fabrication-ready flat part.
+- Show the difference between inner slots and edge-open notches.
+
+What to show
+1. Paste the code into the editor.
+2. Point at top and bottom edge notches.
+3. Point at left and right tabs.
+4. Mention that `slot()` is an inner feature, while `notches` live on the outer edge.
+
+Expected result
+- One panel with tabs on the left and right.
+- Open notches on the top and bottom.
+- Two inner slots and one inner circle.
+
+Code
+const panel = cad.panel({
+  width: 150,
+  height: 90,
+  thickness: 3,
+  clearance: 0.15,
+  edges: {
+    top: { kind: 'notches', count: 2, segmentLength: 24, inset: 10 },
+    bottom: { kind: 'notches', count: 2, segmentLength: 24, inset: 10 },
+    left: { kind: 'tabs', count: 2, segmentLength: 18, inset: 12 },
+    right: { kind: 'tabs', count: 2, segmentLength: 18, inset: 12 }
+  }
+})
+  .cut(cad.slot(42, 8).centerAt([42, 22]))
+  .cut(cad.slot(42, 8).centerAt([108, 22]))
+  .cut(cad.circle(4).centerAt([75, 60]))
+  .onLayer('cut');
+
+return cad.sketch({
+  panel
+});

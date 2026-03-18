@@ -1,0 +1,81 @@
+MVP demo 02: flat layout of box parts
+
+Goal
+- Show that the DSL can build several compatible flat parts and arrange them deterministically on a sheet.
+- Show `cad.panel(...)` plus `cad.flatLayout(...)`.
+
+What to show
+1. Paste the code into the editor.
+2. Point out the six parts: front, back, leftSide, rightSide, bottom, lid.
+3. Mention that this is still 2D fabrication planning, not a 3D box generator.
+
+Expected result
+- Two columns of parts.
+- A lid with a handle slot.
+- Tabs and notches visible on matching edges.
+
+Code
+const thickness = 3;
+const clearance = 0.15;
+const boxWidth = 168;
+const boxDepth = 112;
+const boxHeight = 96;
+
+function wallPanel(width, sideKind) {
+  return cad.panel({
+    width,
+    height: boxHeight,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'notches', count: 3, segmentLength: 24, inset: 8 },
+      bottom: { kind: 'notches', count: 3, segmentLength: 24, inset: 8 },
+      left: { kind: sideKind, count: 2, segmentLength: 18, inset: 10 },
+      right: { kind: sideKind, count: 2, segmentLength: 18, inset: 10 }
+    }
+  });
+}
+
+function horizontalPanel(withHandle, w, h) {
+  let panel = cad.panel({
+    width: w ?? boxWidth,
+    height: h ?? boxDepth,
+    thickness,
+    clearance,
+    edges: {
+      top: { kind: 'tabs', count: 3, segmentLength: 24, inset: 8 },
+      bottom: { kind: 'tabs', count: 3, segmentLength: 24, inset: 8 },
+      left: { kind: 'tabs', count: 2, segmentLength: 18, inset: 10 },
+      right: { kind: 'tabs', count: 2, segmentLength: 18, inset: 10 }
+    }
+  });
+
+  if (withHandle) {
+    panel = panel.cut(cad.slot(56, 12).centerAt([boxWidth / 2, 24]));
+  }
+
+  return panel;
+}
+
+const front = wallPanel(boxWidth, 'tabs')
+  .cut(cad.slot(52, 8).centerAt([boxWidth / 2, boxHeight - 12]));
+
+const back = wallPanel(boxWidth, 'tabs');
+const leftSide = wallPanel(boxDepth, 'notches');
+const rightSide = wallPanel(boxDepth, 'notches')
+  .cut(cad.slot(44, 10).centerAt([boxDepth / 2, 24]));
+
+const bottom = horizontalPanel(false);
+const lid = horizontalPanel(true);
+
+return cad.flatLayout(
+  {
+    front,
+    back,
+    leftSide,
+    rightSide,
+    bottom,
+    lid
+  },
+  { columns: 2, gapX: 20, gapY: 20 }
+);
