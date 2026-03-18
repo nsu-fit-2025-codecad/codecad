@@ -1,36 +1,9 @@
 import { buildInnerFitPolygon } from '@/lib/nesting/nfp/nfp';
-import { createShape, polygonArea } from '@/lib/nesting/polygon/polygon-math';
 import type { NfpCache } from '@/lib/nesting/nfp/nfp-cache';
 import { pairwiseVertexCandidates } from '@/lib/nesting/placement/place-candidates';
-import type {
-  HoleRegion,
-  PlacedPartState,
-} from '@/lib/nesting/placement/place-types';
+import type { PlacedPartState } from '@/lib/nesting/placement/place-types';
 import type { Point, PolygonShape } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
-
-export const extractHoleRegions = (shape: PolygonShape): HoleRegion[] =>
-  shape.contours
-    .map((contour, index) => {
-      if (polygonArea(contour) >= -NESTING_EPSILON) {
-        return null;
-      }
-
-      const holeShape = createShape([[...contour].reverse()]);
-
-      if (
-        holeShape.contours.length === 0 ||
-        holeShape.area <= NESTING_EPSILON
-      ) {
-        return null;
-      }
-
-      return {
-        id: `hole-${index}`,
-        shape: holeShape,
-      };
-    })
-    .filter((holeRegion): holeRegion is HoleRegion => holeRegion !== null);
 
 export const holeInteriorAnchors = (
   holeShape: PolygonShape,

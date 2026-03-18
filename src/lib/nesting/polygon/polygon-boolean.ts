@@ -2,6 +2,7 @@ import {
   areBoundsOverlapping,
   polygonArea,
 } from '@/lib/nesting/polygon/polygon-math';
+import { extractHoleRegions } from '@/lib/nesting/polygon/hole-regions';
 import type { Contour, Point, PolygonShape } from '@/lib/nesting/polygon/types';
 import { NESTING_EPSILON } from '@/lib/nesting/polygon/types';
 
@@ -345,6 +346,14 @@ export function isShapeInsideBin(
           }
         }
       }
+    }
+  }
+
+  const targetHoleRegions = extractHoleRegions(bin, 'target-hole');
+
+  for (const holeRegion of targetHoleRegions) {
+    if (polygonsOverlap(shape, holeRegion.shape, gap)) {
+      return false;
     }
   }
 
