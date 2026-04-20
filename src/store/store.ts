@@ -16,6 +16,7 @@ interface ParametersState {
   add: (parameter: Omit<Parameter, 'onValueChange'>) => void;
   edit: (name: string, updates: Partial<Parameter>) => void;
   remove: (name: string) => void;
+  replaceAll: (parameters: readonly Parameter[]) => void;
   updateValue: (name: string, value: number) => void;
 }
 
@@ -35,6 +36,10 @@ export const useParametersStore = create<ParametersState>()(
         set((state) => ({
           parameters: state.parameters.filter((param) => param.name !== name),
         })),
+      replaceAll: (parameters) =>
+        set({
+          parameters: parameters.map((parameter) => ({ ...parameter })),
+        }),
       updateValue: (name, value) =>
         set((state) => ({
           parameters: state.parameters.map((param) =>

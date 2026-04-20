@@ -2,18 +2,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
-import { Boxes, Package, SlidersHorizontal } from 'lucide-react';
+import { Boxes, Package, Shapes, SlidersHorizontal } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
+  onToggleDemoGuide: () => void;
   isNesting?: boolean;
+  isDemoGuideOpen?: boolean;
   className?: string;
 }
 
 export const Toolbar = ({
   onRunNesting,
+  onToggleDemoGuide,
   isNesting = false,
+  isDemoGuideOpen = false,
   className,
 }: ToolbarProps) => {
   const {
@@ -57,6 +61,16 @@ export const Toolbar = ({
           disabled={isNesting}
         >
           <Package />
+        </Button>
+        <Button
+          variant={isDemoGuideOpen ? 'default' : 'outline'}
+          onClick={onToggleDemoGuide}
+          className="cursor-pointer"
+          size="icon"
+          aria-label={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
+          title={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
+        >
+          <Shapes />
         </Button>
         <ThemeToggle />
       </CardContent>

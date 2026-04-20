@@ -6,6 +6,7 @@ describe('usePanesStore', () => {
     usePanesStore.setState({
       isModelsPaneOpen: true,
       isParametersPaneOpen: true,
+      isDemoPaneOpen: false,
     });
   });
 
@@ -39,5 +40,13 @@ describe('usePanesStore', () => {
 
     usePanesStore.getState().toggleParametersPane();
     expect(usePanesStore.getState().isParametersPaneOpen).toBe(true);
+  });
+
+  it('toggles demo pane open and closed', () => {
+    usePanesStore.getState().toggleDemoPane();
+    expect(usePanesStore.getState().isDemoPaneOpen).toBe(true);
+
+    usePanesStore.getState().toggleDemoPane();
+    expect(usePanesStore.getState().isDemoPaneOpen).toBe(false);
   });
 });
