@@ -34,6 +34,7 @@ export const parameterSchema = z
 
 export const packingOptionsSchema = z
   .object({
+    nestingEngine: z.enum(['typescript', 'rust-wasm']).optional(),
     gap: z.number().optional(),
     allowRotation: z.boolean().optional(),
     rotationCount: z.number().optional(),

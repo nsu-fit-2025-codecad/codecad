@@ -1,4 +1,4 @@
-import { packModelsIntoTargetModel } from '@/lib/nesting';
+import { packModelsIntoTargetModelAsync } from '@/lib/nesting';
 import type {
   NestingWorkerRequest,
   NestingWorkerResponse,
@@ -11,7 +11,7 @@ interface WorkerScope {
 
 const workerContext = self as WorkerScope;
 
-workerContext.onmessage = (event: MessageEvent<NestingWorkerRequest>) => {
+workerContext.onmessage = async (event: MessageEvent<NestingWorkerRequest>) => {
   const message = event.data;
 
   if (message.type !== 'run') {
@@ -19,7 +19,7 @@ workerContext.onmessage = (event: MessageEvent<NestingWorkerRequest>) => {
   }
 
   try {
-    const result = packModelsIntoTargetModel(
+    const result = await packModelsIntoTargetModelAsync(
       message.model,
       message.targetModelId,
       message.options,

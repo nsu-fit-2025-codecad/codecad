@@ -17,6 +17,7 @@ import type {
 } from '@/lib/nesting/orchestration/runtime-types';
 import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runtime-types';
 import type { PackingRunCallbacks } from '@/lib/nesting';
+import { rustWasmNestingSolver } from '@/lib/nesting/solver/rust-wasm/adapter';
 
 const DETERMINISTIC_PREVIEW_PLACEMENT_STEP = 3;
 
@@ -247,4 +248,16 @@ export const runNestingEngine = (
       geneticSeed: geneticResult.seed,
     },
   };
+};
+
+export const runNestingEngineAsync = async (
+  prepared: PreparedNestInput,
+  options: NormalizedPackingOptions,
+  callbacks: PackingRunCallbacks = {}
+): Promise<EngineExecutionResult> => {
+  if (options.nestingEngine === 'rust-wasm') {
+    return rustWasmNestingSolver.execute(prepared, options, callbacks);
+  }
+
+  return runNestingEngine(prepared, options, callbacks);
 };

@@ -1,10 +1,19 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { NestingGeneticSettings } from '@/components/nesting-genetic-settings';
 import { NestingRotationControl } from '@/components/nesting-rotation-control';
+import type { NestingEngine } from '@/lib/nesting';
 
 interface NestingSettingsFormProps {
+  nestingEngine: NestingEngine;
   rotationCount: number;
   gapValue: string;
   curveToleranceValue: string;
@@ -15,6 +24,7 @@ interface NestingSettingsFormProps {
   crossoverRateValue: string;
   eliteCountValue: string;
   isNesting: boolean;
+  onNestingEngineChange: (engine: NestingEngine) => void;
   onRotationCountChange: (rotationCount: number) => void;
   onGapChange: (value: string) => void;
   onCurveToleranceChange: (value: string) => void;
@@ -27,6 +37,7 @@ interface NestingSettingsFormProps {
 }
 
 export const NestingSettingsForm = ({
+  nestingEngine,
   rotationCount,
   gapValue,
   curveToleranceValue,
@@ -37,6 +48,7 @@ export const NestingSettingsForm = ({
   crossoverRateValue,
   eliteCountValue,
   isNesting,
+  onNestingEngineChange,
   onRotationCountChange,
   onGapChange,
   onCurveToleranceChange,
@@ -56,6 +68,26 @@ export const NestingSettingsForm = ({
     </div>
     <ScrollArea className="max-h-[60vh] md:min-h-0 md:flex-1">
       <div className="space-y-4 p-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="nesting-engine" className="text-sm font-medium">
+            Engine
+          </Label>
+          <Select
+            value={nestingEngine}
+            onValueChange={(value) =>
+              onNestingEngineChange(value as NestingEngine)
+            }
+            disabled={isNesting}
+          >
+            <SelectTrigger id="nesting-engine">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="typescript">TypeScript stable</SelectItem>
+              <SelectItem value="rust-wasm">Rust/WASM experimental</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <NestingRotationControl
           rotationCount={rotationCount}
           isNesting={isNesting}

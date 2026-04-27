@@ -23,7 +23,9 @@ export interface NormalizedPackingOptions extends Omit<
   | 'crossoverRate'
   | 'eliteCount'
   | 'useGeneticSearch'
+  | 'nestingEngine'
 > {
+  nestingEngine: NonNullable<PackingOptions['nestingEngine']>;
   gap: number;
   allowRotation: boolean;
   rotationCount?: number;

@@ -17,7 +17,7 @@ import {
   resolveRotationSelection,
   rotationCountToAngles,
 } from '@/lib/nesting/polygon/rotations';
-import type { PackingOptions } from '@/lib/nesting';
+import type { NestingEngine, PackingOptions } from '@/lib/nesting';
 
 const resolveRotationFromOptions = (options: PackingOptions | undefined) =>
   resolveRotationSelection({
@@ -68,6 +68,9 @@ export const NestingTargetDialog = ({
   const [selectedTargetModelId, setSelectedTargetModelId] = useState<
     string | null
   >(initialTargetModelId);
+  const [nestingEngine, setNestingEngine] = useState<NestingEngine>(
+    initialOptions?.nestingEngine ?? 'typescript'
+  );
   const [gapValue, setGapValue] = useState(String(initialOptions?.gap ?? 0));
   const [rotationCount, setRotationCount] = useState(
     initialRotationSelection.displayRotationCount
@@ -109,6 +112,7 @@ export const NestingTargetDialog = ({
       models.some((model) => model.id === initialTargetModelId);
 
     setSelectedTargetModelId(hasInitialTarget ? initialTargetModelId : null);
+    setNestingEngine(initialOptions?.nestingEngine ?? 'typescript');
     setGapValue(String(initialOptions?.gap ?? 0));
     const resolvedRotationSelection =
       resolveRotationFromOptions(initialOptions);
@@ -166,6 +170,7 @@ export const NestingTargetDialog = ({
     );
 
     onConfirm(selectedTargetModelId, {
+      nestingEngine,
       allowRotation: rotations.length > 1,
       rotationCount:
         legacyRotations === null ? normalizedRotationCount : undefined,
@@ -196,6 +201,7 @@ export const NestingTargetDialog = ({
               onSelect={setSelectedTargetModelId}
             />
             <NestingSettingsForm
+              nestingEngine={nestingEngine}
               rotationCount={rotationCount}
               gapValue={gapValue}
               curveToleranceValue={curveToleranceValue}
@@ -206,6 +212,7 @@ export const NestingTargetDialog = ({
               crossoverRateValue={crossoverRateValue}
               eliteCountValue={eliteCountValue}
               isNesting={isNesting}
+              onNestingEngineChange={setNestingEngine}
               onRotationCountChange={(value) => {
                 setLegacyRotations(null);
                 setRotationCount(value);

@@ -87,6 +87,7 @@ const preparedInput: PreparedNestInput = {
 };
 
 const normalizedOptions: NormalizedPackingOptions = {
+  nestingEngine: 'typescript',
   gap: 0,
   allowRotation: true,
   rotationCount: 4,

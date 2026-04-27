@@ -22,6 +22,7 @@ describe('project share URL state', () => {
       parameters: [{ name: 'width', value: 120, min: 10, max: 240 }],
       editorSettings: { autorun: false },
       nestingOptions: {
+        nestingEngine: 'rust-wasm',
         gap: 1.5,
         rotations: [0, 90],
         useGeneticSearch: true,
@@ -37,6 +38,7 @@ describe('project share URL state', () => {
       ...state,
       nestingOptions: expect.objectContaining({
         gap: 1.5,
+        nestingEngine: 'rust-wasm',
         allowRotation: true,
         rotations: [0, 90],
         useGeneticSearch: true,

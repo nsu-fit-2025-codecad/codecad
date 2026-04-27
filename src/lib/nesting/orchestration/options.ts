@@ -17,6 +17,7 @@ export const normalizePackingOptions = (
 
   return {
     ...options,
+    nestingEngine: options.nestingEngine ?? 'typescript',
     gap: normalizeNumeric(options.gap, 0, 0),
     allowRotation: resolvedRotationSelection.rotations.length > 1,
     rotationCount: resolvedRotationSelection.rotationCount ?? undefined,
