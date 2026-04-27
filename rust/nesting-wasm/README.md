@@ -22,3 +22,8 @@ its contents into the same `pkg` folder.
 The current Rust code adapts the app's JSON payload into `u-nesting-d2` and
 runs its `BottomLeftFill` strategy. It is still experimental until parity
 fixtures cover holes, concave parts, spacing, and rotations.
+
+The crate also pins `sparrow` to the same revision used by the browser-oriented
+`sparroWASM` reference. The next adapter step is to convert the app payload into
+the jagua/sparrow strip-packing JSON format and map `sparrow` placements back to
+the app placement JSON.
