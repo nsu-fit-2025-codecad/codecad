@@ -1,6 +1,19 @@
+use jagua_rs::io::ext_repr::{
+    ExtItem as JaguaExtItem, ExtPolygon, ExtSPolygon, ExtShape,
+};
+use jagua_rs::io::import::Importer;
+use jagua_rs::probs::spp::io::ext_repr::{
+    ExtItem as StripExtItem, ExtSPInstance,
+};
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro256PlusPlus;
 use serde::{Deserialize, Serialize};
+use sparrow::config::DEFAULT_SPARROW_CONFIG;
+use sparrow::optimizer::optimize;
+use sparrow::util::listener::DummySolListener;
+use sparrow::util::terminator::Terminator;
 use std::collections::HashSet;
-use u_nesting_d2::{Boundary2D, Config, Geometry2D, Nester2D, Solver, Strategy};
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Deserialize)]
@@ -20,9 +33,9 @@ struct Bounds {
     #[serde(rename = "maxY")]
     _max_y: f64,
     #[serde(rename = "width")]
-    _width: f64,
+    width: f64,
     #[serde(rename = "height")]
-    _height: f64,
+    height: f64,
 }
 
 #[derive(Clone, Deserialize)]
@@ -41,6 +54,7 @@ struct NestPart {
 struct NestOptions {
     gap: f64,
     rotations: Vec<f64>,
+    seed: Option<u64>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -65,59 +79,114 @@ struct NestOutput {
     not_placed_ids: Vec<String>,
 }
 
-fn normalize_contour(contour: &[Point], offset_x: f64, offset_y: f64) -> Vec<(f64, f64)> {
-    contour
-        .iter()
-        .map(|point| (point.x - offset_x, point.y - offset_y))
-        .collect()
+struct WasmTerminator {
+    timeout: Option<jagua_rs::Instant>,
 }
 
-fn build_boundary(shape: &PolygonShape) -> Result<Boundary2D, String> {
+impl WasmTerminator {
+    fn new() -> Self {
+        Self { timeout: None }
+    }
+}
+
+impl Terminator for WasmTerminator {
+    fn kill(&self) -> bool {
+        self.timeout
+            .map_or(false, |timeout| jagua_rs::Instant::now() > timeout)
+    }
+
+    fn new_timeout(&mut self, timeout: Duration) {
+        self.timeout = Some(jagua_rs::Instant::now() + timeout);
+    }
+
+    fn timeout_at(&self) -> Option<jagua_rs::Instant> {
+        self.timeout
+    }
+}
+
+fn normalize_contour(contour: &[Point], offset_x: f64, offset_y: f64) -> ExtSPolygon {
+    ExtSPolygon(
+        contour
+            .iter()
+            .map(|point| ((point.x - offset_x) as f32, (point.y - offset_y) as f32))
+            .collect(),
+    )
+}
+
+fn build_shape(shape: &PolygonShape) -> Result<ExtShape, String> {
     let exterior = shape
         .contours
         .first()
-        .ok_or_else(|| "Target has no exterior contour.".to_string())?;
-    let mut boundary = Boundary2D::new(normalize_contour(
-        exterior,
-        shape.bounds.min_x,
-        shape.bounds.min_y,
-    ));
+        .ok_or_else(|| "Shape has no exterior contour.".to_string())?;
+    let outer = normalize_contour(exterior, shape.bounds.min_x, shape.bounds.min_y);
 
-    for hole in shape.contours.iter().skip(1) {
-        boundary = boundary.with_hole(normalize_contour(
-            hole,
-            shape.bounds.min_x,
-            shape.bounds.min_y,
-        ));
+    if shape.contours.len() <= 1 {
+        return Ok(ExtShape::SimplePolygon(outer));
     }
 
-    Ok(boundary)
+    Ok(ExtShape::Polygon(ExtPolygon {
+        outer,
+        inner: shape
+            .contours
+            .iter()
+            .skip(1)
+            .map(|hole| normalize_contour(hole, shape.bounds.min_x, shape.bounds.min_y))
+            .collect(),
+    }))
 }
 
-fn build_geometry(part: &NestPart, rotations_deg: &[f64]) -> Result<Geometry2D, String> {
-    let exterior = part
-        .shape
-        .contours
-        .first()
-        .ok_or_else(|| format!("Part {} has no exterior contour.", part.id))?;
-    let mut geometry = Geometry2D::new(part.id.clone())
-        .with_polygon(normalize_contour(
-            exterior,
-            part.shape.bounds.min_x,
-            part.shape.bounds.min_y,
-        ))
-        .with_quantity(1)
-        .with_rotations_deg(rotations_deg.to_vec());
+fn build_instance(input: &NestInput) -> Result<ExtSPInstance, String> {
+    let rotations = if input.options.rotations.is_empty() {
+        vec![0.0]
+    } else {
+        input.options.rotations.clone()
+    };
+    Ok(ExtSPInstance {
+        name: "code-cad".to_string(),
+        strip_height: input.target.bounds.height as f32,
+        items: input
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(index, part)| {
+                Ok(StripExtItem {
+                    base: JaguaExtItem {
+                        id: index as u64,
+                        allowed_orientations: Some(
+                            rotations.iter().map(|rotation| *rotation as f32).collect(),
+                        ),
+                        shape: build_shape(&part.shape)?,
+                        min_quality: None,
+                    },
+                    demand: 1,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+    })
+}
 
-    for hole in part.shape.contours.iter().skip(1) {
-        geometry = geometry.with_hole(normalize_contour(
-            hole,
-            part.shape.bounds.min_x,
-            part.shape.bounds.min_y,
-        ));
+fn transformed_bounds(part: &NestPart, rotation: f64, translation: (f32, f32)) -> (f64, f64) {
+    let radians = rotation;
+    let cos = radians.cos();
+    let sin = radians.sin();
+    let tx = f64::from(translation.0);
+    let ty = f64::from(translation.1);
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+
+    if let Some(exterior) = part.shape.contours.first() {
+        for point in exterior {
+            let x = point.x - part.shape.bounds.min_x;
+            let y = point.y - part.shape.bounds.min_y;
+            let transformed_x = x * cos - y * sin + tx;
+            let transformed_y = x * sin + y * cos + ty;
+
+            min_x = min_x.min(transformed_x);
+            min_y = min_y.min(transformed_y);
+        }
     }
 
-    Ok(geometry)
+    (min_x.max(0.0), min_y.max(0.0))
 }
 
 fn pack(input: NestInput) -> Result<NestOutput, String> {
@@ -132,68 +201,76 @@ fn pack(input: NestInput) -> Result<NestOutput, String> {
         });
     }
 
-    let rotations = if input.options.rotations.is_empty() {
-        vec![0.0]
+    if input.target.bounds.height <= 0.0 || input.target.bounds.width <= 0.0 {
+        return Err("Target bounds must have positive width and height.".to_string());
+    }
+
+    let mut config = DEFAULT_SPARROW_CONFIG;
+    config.expl_cfg.time_limit = Duration::from_millis(150);
+    config.cmpr_cfg.time_limit = Duration::from_millis(50);
+    config.expl_cfg.separator_config.n_workers = 1;
+    config.cmpr_cfg.separator_config.n_workers = 1;
+    config.min_item_separation = if input.options.gap > 0.0 {
+        Some(input.options.gap as f32)
     } else {
-        input.options.rotations.clone()
+        None
     };
-    let boundary = build_boundary(&input.target)?;
-    let mut geometries = Vec::with_capacity(input.parts.len());
 
-    for part in &input.parts {
-        geometries.push(build_geometry(part, &rotations)?);
+    let ext_instance = build_instance(&input)?;
+    let importer = Importer::new(
+        config.cde_config,
+        config.poly_simpl_tolerance,
+        config.min_item_separation,
+        config.narrow_concavity_cutoff_ratio,
+    );
+    let instance = jagua_rs::probs::spp::io::import(&importer, &ext_instance)
+        .map_err(|error| format!("sparrow import failed: {error}"))?;
+    let rng = Xoshiro256PlusPlus::seed_from_u64(input.options.seed.unwrap_or(1));
+    let mut listener = DummySolListener;
+    let mut terminator = WasmTerminator::new();
+    let epoch = jagua_rs::Instant::now();
+    let solution = optimize(
+        instance.clone(),
+        rng,
+        &mut listener,
+        &mut terminator,
+        &config.expl_cfg,
+        &config.cmpr_cfg,
+    );
+    let exported = jagua_rs::probs::spp::io::export(&instance, &solution, epoch);
+    let mut placed_ids = HashSet::new();
+    let mut placements = Vec::new();
+
+    for placed_item in exported.layout.placed_items {
+        let part_index = placed_item.item_id as usize;
+        let Some(part) = input.parts.get(part_index) else {
+            continue;
+        };
+        let rotation_rad = f64::from(placed_item.transformation.rotation);
+        let (x, y) = transformed_bounds(
+            part,
+            rotation_rad,
+            placed_item.transformation.translation,
+        );
+
+        placed_ids.insert(part.id.clone());
+        placements.push(NestPlacement {
+            id: part.id.clone(),
+            x,
+            y,
+            rotation: rotation_rad.to_degrees(),
+        });
     }
 
-    let config = Config::new()
-        .with_strategy(Strategy::BottomLeftFill)
-        .with_spacing(input.options.gap)
-        .with_time_limit(0);
-    let result = Nester2D::new(config)
-        .solve(&geometries, &boundary)
-        .map_err(|error| format!("u-nesting-d2 solve failed: {error}"))?;
-    let placed_ids: HashSet<String> = result
-        .placements
+    let not_placed_ids = input
+        .parts
         .iter()
-        .map(|placement| placement.geometry_id.clone())
+        .filter(|part| !placed_ids.contains(&part.id))
+        .map(|part| part.id.clone())
         .collect();
-    let mut not_placed_ids = Vec::new();
-
-    for part in &input.parts {
-        if !placed_ids.contains(&part.id) {
-            not_placed_ids.push(part.id.clone());
-        }
-    }
-
-    for id in result.unplaced {
-        if !not_placed_ids.contains(&id) {
-            not_placed_ids.push(id);
-        }
-    }
 
     Ok(NestOutput {
-        placements: result
-            .placements
-            .into_iter()
-            .map(|placement| {
-                let id = placement.geometry_id.clone();
-                let x = placement.x();
-                let y = placement.y();
-                let rotation = placement.angle().to_degrees();
-                let part = input
-                    .parts
-                    .iter()
-                    .find(|candidate| candidate.id == id);
-                let part_min_x = part.map(|candidate| candidate.shape.bounds.min_x).unwrap_or(0.0);
-                let part_min_y = part.map(|candidate| candidate.shape.bounds.min_y).unwrap_or(0.0);
-
-                NestPlacement {
-                    id,
-                    x: input.target.bounds.min_x + x - part_min_x,
-                    y: input.target.bounds.min_y + y - part_min_y,
-                    rotation,
-                }
-            })
-            .collect(),
+        placements,
         not_placed_ids,
     })
 }
