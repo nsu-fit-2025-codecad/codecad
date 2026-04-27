@@ -69,9 +69,17 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
 
     const wasmModule = await loadRustWasmModule();
     const input = serializeRustWasmInput(prepared, options);
-    const output = JSON.parse(
-      wasmModule.run_nesting(JSON.stringify(input))
-    ) as RustWasmNestingOutput;
+    let output: RustWasmNestingOutput;
+
+    try {
+      output = JSON.parse(
+        wasmModule.run_nesting(JSON.stringify(input))
+      ) as RustWasmNestingOutput;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+
+      throw new Error(`Rust/WASM nesting failed. ${reason}`);
+    }
 
     callbacks.onProgress?.({
       phase: 'placing',

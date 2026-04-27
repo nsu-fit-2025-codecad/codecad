@@ -121,6 +121,17 @@ fn build_geometry(part: &NestPart, rotations_deg: &[f64]) -> Result<Geometry2D, 
 }
 
 fn pack(input: NestInput) -> Result<NestOutput, String> {
+    if input.target.contours.is_empty() {
+        return Err("Target has no contours.".to_string());
+    }
+
+    if input.parts.is_empty() {
+        return Ok(NestOutput {
+            placements: Vec::new(),
+            not_placed_ids: Vec::new(),
+        });
+    }
+
     let rotations = if input.options.rotations.is_empty() {
         vec![0.0]
     } else {
@@ -189,6 +200,8 @@ fn pack(input: NestInput) -> Result<NestOutput, String> {
 
 #[wasm_bindgen]
 pub fn run_nesting(input_json: &str) -> Result<String, JsValue> {
+    console_error_panic_hook::set_once();
+
     let input: NestInput = serde_json::from_str(input_json)
         .map_err(|error| JsValue::from_str(&format!("Invalid nesting input: {error}")))?;
     let output = pack(input).map_err(|error| JsValue::from_str(&error))?;
