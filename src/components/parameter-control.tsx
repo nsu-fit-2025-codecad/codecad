@@ -8,15 +8,20 @@ import type { Parameter } from '@/store/store';
 type ParameterControlProps = {
   parameter: Parameter;
   updateValue: (name: string, value: number) => void;
+  onBeforeCommit?: () => void;
+  onCommit?: () => void;
   onEdit: (parameter: Parameter) => void;
 };
 
 export const ParameterControl = ({
   parameter,
   updateValue,
+  onBeforeCommit,
+  onCommit,
   onEdit,
 }: ParameterControlProps) => {
   const [inputValue, setInputValue] = React.useState(String(parameter.value));
+  const isSliderEditingRef = React.useRef(false);
 
   React.useEffect(() => {
     setInputValue(String(parameter.value));
@@ -43,7 +48,14 @@ export const ParameterControl = ({
             }
 
             const clamped = Math.min(max, Math.max(min, num));
+            if (clamped === parameter.value) {
+              setInputValue(String(parameter.value));
+              return;
+            }
+
+            onBeforeCommit?.();
             updateValue(parameter.name, clamped);
+            onCommit?.();
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
@@ -53,7 +65,21 @@ export const ParameterControl = ({
 
         <Slider
           value={[parameter.value]}
-          onValueChange={(values) => updateValue(parameter.name, values[0])}
+          onValueChange={(values) => {
+            if (!isSliderEditingRef.current) {
+              onBeforeCommit?.();
+              isSliderEditingRef.current = true;
+            }
+
+            updateValue(parameter.name, values[0]);
+          }}
+          onValueCommit={(values) => {
+            if (values[0] !== parameter.value) {
+              updateValue(parameter.name, values[0]);
+            }
+            isSliderEditingRef.current = false;
+            onCommit?.();
+          }}
           min={parameter.min}
           max={parameter.max}
           step={parameter.step}

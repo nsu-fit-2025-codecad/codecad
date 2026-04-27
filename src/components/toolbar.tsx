@@ -5,16 +5,22 @@ import { usePanesStore } from '@/store/panes-store';
 import {
   Boxes,
   Package,
+  Redo2,
   Share2,
   Shapes,
   SlidersHorizontal,
+  Undo2,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
   onCopyShareUrl: () => void;
+  onUndoProject: () => void;
+  onRedoProject: () => void;
   onToggleDemoGuide: () => void;
+  canUndoProject?: boolean;
+  canRedoProject?: boolean;
   isNesting?: boolean;
   isDemoGuideOpen?: boolean;
   className?: string;
@@ -23,7 +29,11 @@ interface ToolbarProps {
 export const Toolbar = ({
   onRunNesting,
   onCopyShareUrl,
+  onUndoProject,
+  onRedoProject,
   onToggleDemoGuide,
+  canUndoProject = false,
+  canRedoProject = false,
   isNesting = false,
   isDemoGuideOpen = false,
   className,
@@ -59,6 +69,28 @@ export const Toolbar = ({
           }
         >
           <SlidersHorizontal />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onUndoProject}
+          className="cursor-pointer"
+          size="icon"
+          title="Undo Project"
+          aria-label="Undo Project"
+          disabled={!canUndoProject}
+        >
+          <Undo2 />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onRedoProject}
+          className="cursor-pointer"
+          size="icon"
+          title="Redo Project"
+          aria-label="Redo Project"
+          disabled={!canRedoProject}
+        >
+          <Redo2 />
         </Button>
         <Button
           variant="outline"

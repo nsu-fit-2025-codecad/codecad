@@ -23,13 +23,28 @@ import {
 } from '@/lib/demo/mvp-demo';
 import { hydrateProjectState } from '@/lib/project-state/hydrate';
 import {
+  createProjectStateSnapshot,
+  type ProjectStateInput,
+  type ProjectStateSnapshot,
+} from '@/lib/project-state/contract';
+import {
   createProjectShareUrl,
   readProjectStateFromUrl,
   removeProjectStateFromUrl,
 } from '@/lib/project-state/share-url';
+import {
+  createProjectHistory,
+  type ProjectHistory,
+} from '@/lib/project-history';
+import {
+  createProjectHistoryCaptureScheduler,
+  type ProjectHistoryCaptureScheduler,
+} from '@/lib/project-history/capture-scheduler';
+import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
 import { cn } from '@/lib/utils';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
+const CODE_HISTORY_CAPTURE_DELAY_MS = 600;
 
 interface ResolveDisplayedSvgInput {
   committedSvg: string;
@@ -51,7 +66,28 @@ export const HomePage = () => {
   const [model, setModel] = useState<IModel | null>(null);
   const [activeDemoSceneId, setActiveDemoSceneId] =
     useState<MvpDemoSceneId | null>(null);
+  const [historyAvailability, setHistoryAvailability] = useState({
+    canUndo: false,
+    canRedo: false,
+  });
   const modelRevisionRef = useRef(0);
+  const projectHistoryRef = useRef<ProjectHistory | null>(null);
+  const isApplyingHistoryRef = useRef(false);
+  const commitProjectSnapshotRef = useRef<() => void>(() => {});
+  const codeHistorySchedulerRef = useRef<ProjectHistoryCaptureScheduler | null>(
+    null
+  );
+
+  if (!projectHistoryRef.current) {
+    projectHistoryRef.current = createProjectHistory();
+  }
+
+  if (!codeHistorySchedulerRef.current) {
+    codeHistorySchedulerRef.current = createProjectHistoryCaptureScheduler({
+      delayMs: CODE_HISTORY_CAPTURE_DELAY_MS,
+      capture: () => commitProjectSnapshotRef.current(),
+    });
+  }
 
   const { parameters, replaceAll: replaceAllParameters } = useParametersStore();
   const {
@@ -102,6 +138,77 @@ export const HomePage = () => {
     getModelRevision,
     bumpModelRevision,
   });
+  const nestingOptionsRef = useRef(nestingOptions);
+
+  useEffect(() => {
+    nestingOptionsRef.current = nestingOptions;
+  }, [nestingOptions]);
+
+  const updateProjectHistoryAvailability = useCallback(() => {
+    const history = projectHistoryRef.current;
+
+    setHistoryAvailability({
+      canUndo: history?.canUndo() ?? false,
+      canRedo: history?.canRedo() ?? false,
+    });
+  }, []);
+
+  const createCurrentProjectSnapshot = useCallback(
+    (overrides: Partial<ProjectStateInput> = {}) => {
+      const editorState = useEditorStore.getState();
+
+      return createProjectStateSnapshot({
+        code: editorState.code ?? '',
+        parameters: useParametersStore.getState().parameters,
+        editorSettings: {
+          autorun: editorState.settings.autorun,
+        },
+        nestingOptions: nestingOptionsRef.current,
+        selectedTargetModelId: useModelsStore.getState().selectedModelId,
+        ...overrides,
+      });
+    },
+    []
+  );
+
+  const pushProjectSnapshot = useCallback(
+    (snapshot: ProjectStateInput | ProjectStateSnapshot) => {
+      if (isApplyingHistoryRef.current) {
+        return false;
+      }
+
+      const didPush = projectHistoryRef.current?.push(snapshot) ?? false;
+
+      if (didPush) {
+        updateProjectHistoryAvailability();
+      }
+
+      return didPush;
+    },
+    [updateProjectHistoryAvailability]
+  );
+
+  const commitCurrentProjectSnapshot = useCallback(
+    (overrides: Partial<ProjectStateInput> = {}) =>
+      pushProjectSnapshot(createCurrentProjectSnapshot(overrides)),
+    [createCurrentProjectSnapshot, pushProjectSnapshot]
+  );
+
+  commitProjectSnapshotRef.current = () => {
+    commitCurrentProjectSnapshot();
+  };
+
+  const flushPendingCodeSnapshot = useCallback(() => {
+    codeHistorySchedulerRef.current?.flush();
+  }, []);
+
+  const setTrackedNestingOptions = useCallback(
+    (options: typeof nestingOptions) => {
+      nestingOptionsRef.current = options;
+      setNestingOptions(options);
+    },
+    [setNestingOptions]
+  );
 
   const evaluateSourceCode = useCallback(
     (
@@ -181,8 +288,98 @@ export const HomePage = () => {
       return;
     }
 
+    flushPendingCodeSnapshot();
     evaluateSourceCode(code);
-  }, [code, evaluateSourceCode]);
+  }, [code, evaluateSourceCode, flushPendingCodeSnapshot]);
+
+  const applyHistorySnapshot = useCallback(
+    (snapshot: ProjectStateSnapshot) => {
+      codeHistorySchedulerRef.current?.cancel();
+      isApplyingHistoryRef.current = true;
+
+      try {
+        hydrateProjectState({
+          state: snapshot,
+          replaceParameters: replaceAllParameters,
+          editCode,
+          editSettings,
+          setNestingOptions: setTrackedNestingOptions,
+          evaluateSourceCode,
+          selectTargetModel: selectModel,
+          clearSelectedTargetModel: clearSelectedModel,
+        });
+      } finally {
+        isApplyingHistoryRef.current = false;
+        updateProjectHistoryAvailability();
+      }
+    },
+    [
+      clearSelectedModel,
+      editCode,
+      editSettings,
+      evaluateSourceCode,
+      replaceAllParameters,
+      selectModel,
+      setTrackedNestingOptions,
+      updateProjectHistoryAvailability,
+    ]
+  );
+
+  const undoProject = useCallback(() => {
+    flushPendingCodeSnapshot();
+
+    const snapshot = projectHistoryRef.current?.undo();
+
+    if (snapshot) {
+      applyHistorySnapshot(snapshot);
+      return;
+    }
+
+    updateProjectHistoryAvailability();
+  }, [
+    applyHistorySnapshot,
+    flushPendingCodeSnapshot,
+    updateProjectHistoryAvailability,
+  ]);
+
+  const redoProject = useCallback(() => {
+    flushPendingCodeSnapshot();
+
+    const snapshot = projectHistoryRef.current?.redo();
+
+    if (snapshot) {
+      applyHistorySnapshot(snapshot);
+      return;
+    }
+
+    updateProjectHistoryAvailability();
+  }, [
+    applyHistorySnapshot,
+    flushPendingCodeSnapshot,
+    updateProjectHistoryAvailability,
+  ]);
+
+  const handleCodeChange = useCallback(
+    (nextCode?: string) => {
+      editCode(nextCode);
+
+      if (!isApplyingHistoryRef.current) {
+        codeHistorySchedulerRef.current?.schedule();
+      }
+    },
+    [editCode]
+  );
+
+  const handleAutorunChange = useCallback(
+    (autorun: boolean) => {
+      flushPendingCodeSnapshot();
+      editSettings({ autorun });
+      commitCurrentProjectSnapshot({
+        editorSettings: { autorun },
+      });
+    },
+    [commitCurrentProjectSnapshot, editSettings, flushPendingCodeSnapshot]
+  );
 
   useEffect(() => {
     if (!settings.autorun || !code) {
@@ -201,32 +398,28 @@ export const HomePage = () => {
   useEffect(() => {
     const sharedState = readProjectStateFromUrl();
 
-    if (!sharedState) {
-      return;
+    projectHistoryRef.current?.push(createCurrentProjectSnapshot());
+
+    if (sharedState) {
+      applyHistorySnapshot(sharedState);
+      projectHistoryRef.current?.push(sharedState);
+
+      window.history.replaceState(
+        null,
+        '',
+        removeProjectStateFromUrl(window.location.href)
+      );
     }
 
-    hydrateProjectState({
-      state: sharedState,
-      replaceParameters: replaceAllParameters,
-      editCode,
-      editSettings,
-      setNestingOptions,
-      evaluateSourceCode,
-      selectTargetModel: selectModel,
-      clearSelectedTargetModel: clearSelectedModel,
-    });
-
-    window.history.replaceState(
-      null,
-      '',
-      removeProjectStateFromUrl(window.location.href)
-    );
+    updateProjectHistoryAvailability();
     // Import runs once on mount; the URL cleanup prevents StrictMode remounts
     // from applying the same share payload twice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copyShareUrl = useCallback(async () => {
+    flushPendingCodeSnapshot();
+
     const shareUrl = createProjectShareUrl({
       code: code ?? '',
       parameters,
@@ -244,12 +437,20 @@ export const HomePage = () => {
       console.error('Failed to copy share URL:', nextError);
       toast.error('Could not copy Share URL');
     }
-  }, [code, nestingOptions, parameters, selectedModelId, settings.autorun]);
+  }, [
+    code,
+    flushPendingCodeSnapshot,
+    nestingOptions,
+    parameters,
+    selectedModelId,
+    settings.autorun,
+  ]);
 
   const handleLoadDemoScene = useCallback(
     (sceneId: MvpDemoSceneId) => {
       const scene = getMvpDemoScene(sceneId);
 
+      flushPendingCodeSnapshot();
       // Demo loads replace the whole parameter set so the pane matches the scene.
       replaceAllParameters(scene.parameters);
       openParametersPane();
@@ -259,10 +460,17 @@ export const HomePage = () => {
       if (!settings.autorun) {
         evaluateSourceCode(scene.code, scene.parameters);
       }
+
+      commitCurrentProjectSnapshot({
+        code: scene.code,
+        parameters: scene.parameters,
+      });
     },
     [
+      commitCurrentProjectSnapshot,
       editCode,
       evaluateSourceCode,
+      flushPendingCodeSnapshot,
       openParametersPane,
       replaceAllParameters,
       settings.autorun,
@@ -273,11 +481,94 @@ export const HomePage = () => {
     (_sceneId: MvpDemoSceneId, presetId: MvpDemoNestingPresetId) => {
       const preset = getMvpDemoNestingPreset(presetId);
 
-      setNestingOptions(preset.options);
+      flushPendingCodeSnapshot();
+      setTrackedNestingOptions(preset.options);
       setIsDialogOpen(true);
+      commitCurrentProjectSnapshot({
+        nestingOptions: preset.options,
+      });
     },
-    [setIsDialogOpen, setNestingOptions]
+    [
+      commitCurrentProjectSnapshot,
+      flushPendingCodeSnapshot,
+      setIsDialogOpen,
+      setTrackedNestingOptions,
+    ]
   );
+
+  const handleSelectModel = useCallback(
+    (modelId: string) => {
+      flushPendingCodeSnapshot();
+      selectModel(modelId);
+      commitCurrentProjectSnapshot({
+        selectedTargetModelId: modelId,
+      });
+    },
+    [commitCurrentProjectSnapshot, flushPendingCodeSnapshot, selectModel]
+  );
+
+  const handleClearSelectedModel = useCallback(() => {
+    flushPendingCodeSnapshot();
+    clearSelectedModel();
+    commitCurrentProjectSnapshot({
+      selectedTargetModelId: null,
+    });
+  }, [
+    clearSelectedModel,
+    commitCurrentProjectSnapshot,
+    flushPendingCodeSnapshot,
+  ]);
+
+  const evaluateCurrentProjectIfAutorun = useCallback(() => {
+    const editorState = useEditorStore.getState();
+
+    if (!editorState.settings.autorun || !editorState.code) {
+      return;
+    }
+
+    evaluateSourceCode(
+      editorState.code,
+      useParametersStore.getState().parameters
+    );
+  }, [evaluateSourceCode]);
+
+  const handleParameterValueChange = useCallback(
+    (name: string, value: number) => {
+      useParametersStore.getState().updateValue(name, value);
+      evaluateCurrentProjectIfAutorun();
+    },
+    [evaluateCurrentProjectIfAutorun]
+  );
+
+  const handleParameterCommit = useCallback(() => {
+    commitCurrentProjectSnapshot();
+    evaluateCurrentProjectIfAutorun();
+  }, [commitCurrentProjectSnapshot, evaluateCurrentProjectIfAutorun]);
+
+  useEffect(() => {
+    const handleProjectHistoryHotkey = (event: KeyboardEvent) => {
+      const action = getProjectHistoryHotkeyAction(event);
+
+      if (!action) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (action === 'undo') {
+        undoProject();
+        return;
+      }
+
+      redoProject();
+    };
+
+    window.addEventListener('keydown', handleProjectHistoryHotkey);
+
+    return () => {
+      window.removeEventListener('keydown', handleProjectHistoryHotkey);
+    };
+  }, [redoProject, undoProject]);
 
   const runNesting = () => {
     if (!model || !model.models || isRunning) {
@@ -297,12 +588,18 @@ export const HomePage = () => {
         })}
         selectedModelId={selectedModelId}
         onExecuteCode={evalInput}
+        onCodeChange={handleCodeChange}
+        onAutorunChange={handleAutorunChange}
       />
       <Toolbar
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
         onRunNesting={runNesting}
         onCopyShareUrl={copyShareUrl}
+        onUndoProject={undoProject}
+        onRedoProject={redoProject}
         onToggleDemoGuide={toggleDemoPane}
+        canUndoProject={historyAvailability.canUndo}
+        canRedoProject={historyAvailability.canRedo}
         isNesting={isRunning}
         isDemoGuideOpen={isDemoPaneOpen}
       />
@@ -314,7 +611,13 @@ export const HomePage = () => {
         isNesting={isRunning}
         onOpenChange={setIsDialogOpen}
         onConfirm={async (targetModelId, options) => {
-          setNestingOptions(options);
+          flushPendingCodeSnapshot();
+          setTrackedNestingOptions(options);
+          selectModel(targetModelId);
+          commitCurrentProjectSnapshot({
+            nestingOptions: options,
+            selectedTargetModelId: targetModelId,
+          });
           await runNestingForTarget(targetModelId, options);
         }}
       />
@@ -346,12 +649,17 @@ export const HomePage = () => {
           className="fixed left-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
           onExportDXF={exportDXF}
           onClose={closeModelsPane}
+          onSelectModel={handleSelectModel}
+          onClearSelectedModel={handleClearSelectedModel}
         />
       )}
       {isParametersPaneOpen && (
         <ParametersPane
           className="fixed right-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
           onClose={closeParametersPane}
+          onParameterValueChange={handleParameterValueChange}
+          onBeforeParameterCommit={flushPendingCodeSnapshot}
+          onParameterCommit={handleParameterCommit}
         />
       )}
     </div>

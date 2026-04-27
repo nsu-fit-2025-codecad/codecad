@@ -13,6 +13,8 @@ interface WorkbenchLayoutProps {
   svgString: string;
   selectedModelId: string | null;
   onExecuteCode: () => void;
+  onCodeChange: (code?: string) => void;
+  onAutorunChange: (autorun: boolean) => void;
   className?: string;
 }
 
@@ -20,6 +22,8 @@ export const WorkbenchLayout = ({
   svgString,
   selectedModelId,
   onExecuteCode,
+  onCodeChange,
+  onAutorunChange,
   className,
 }: WorkbenchLayoutProps) => {
   const [isDesktopLayout, setIsDesktopLayout] = useState<boolean>(
@@ -63,7 +67,11 @@ export const WorkbenchLayout = ({
           className="min-h-0 min-w-0"
         >
           <div className="h-full w-full bg-background px-2 pt-4">
-            <CodeEditor onExecuteCode={onExecuteCode} />
+            <CodeEditor
+              onExecuteCode={onExecuteCode}
+              onCodeChange={onCodeChange}
+              onAutorunChange={onAutorunChange}
+            />
           </div>
         </ResizablePanel>
         <ResizableHandle

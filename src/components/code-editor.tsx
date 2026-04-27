@@ -10,11 +10,18 @@ import { useEditorStore } from '@/store/store';
 
 interface CodeEditorProps {
   onExecuteCode: () => void;
+  onCodeChange: (code?: string) => void;
+  onAutorunChange: (autorun: boolean) => void;
   className?: string;
 }
 
-export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
-  const { code, editCode, settings, editSettings } = useEditorStore();
+export const CodeEditor = ({
+  onExecuteCode,
+  onCodeChange,
+  onAutorunChange,
+  className,
+}: CodeEditorProps) => {
+  const { code, settings } = useEditorStore();
   const { resolvedTheme } = useTheme();
 
   return (
@@ -29,7 +36,7 @@ export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
             defaultLanguage="javascript"
             beforeMount={configureCadEditor}
             value={code}
-            onChange={editCode}
+            onChange={onCodeChange}
             theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs-light'}
             options={{
               automaticLayout: true,
@@ -54,9 +61,7 @@ export const CodeEditor = ({ onExecuteCode, className }: CodeEditorProps) => {
         >
           <Checkbox
             checked={settings.autorun}
-            onCheckedChange={(checked) =>
-              editSettings({ autorun: checked === true })
-            }
+            onCheckedChange={(checked) => onAutorunChange(checked === true)}
           />
           <p>Autorun</p>
         </Label>
