@@ -13,3 +13,6 @@ console_error_panic_hook = "0.1"
 getrandom = { version = "0.2", features = ["js"] }
 u-nesting-d2 = "0.1"
 wasm-bindgen = "0.2"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
