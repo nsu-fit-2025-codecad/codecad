@@ -101,26 +101,29 @@ export const CodeEditor = ({
     const endPosition = model.getPositionAt(changedRange.endOffset);
     const viewState = editor.saveViewState();
 
-    isApplyingExternalCodeRef.current = true;
-    model.applyEdits(
-      [
-        {
-          range: {
-            startLineNumber: startPosition.lineNumber,
-            startColumn: startPosition.column,
-            endLineNumber: endPosition.lineNumber,
-            endColumn: endPosition.column,
+    try {
+      isApplyingExternalCodeRef.current = true;
+      model.applyEdits(
+        [
+          {
+            range: {
+              startLineNumber: startPosition.lineNumber,
+              startColumn: startPosition.column,
+              endLineNumber: endPosition.lineNumber,
+              endColumn: endPosition.column,
+            },
+            text: changedRange.text,
           },
-          text: changedRange.text,
-        },
-      ],
-      false
-    );
-    isApplyingExternalCodeRef.current = false;
-    lastAppliedCodeRef.current = nextCode;
+        ],
+        false
+      );
+      lastAppliedCodeRef.current = nextCode;
 
-    if (viewState) {
-      editor.restoreViewState(viewState);
+      if (viewState) {
+        editor.restoreViewState(viewState);
+      }
+    } finally {
+      isApplyingExternalCodeRef.current = false;
     }
   }, [code]);
 

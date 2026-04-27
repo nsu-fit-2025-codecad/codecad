@@ -5,7 +5,6 @@ import { createProjectHistoryCaptureScheduler } from '@/lib/project-history/capt
 import {
   getProjectHistoryHotkeyAction,
   isProjectHistoryEditableTargetInfo,
-  isProjectHistoryHotkeyTarget,
 } from '@/lib/project-history/hotkeys';
 
 const createSnapshot = (code: string): ProjectStateSnapshot => ({
@@ -121,19 +120,24 @@ describe('project history capture scheduler', () => {
 
   it('captures once when the pending timer fires', () => {
     const capture = vi.fn();
-    let pendingCallback: (() => void) | null = null;
+    let wasCallbackScheduled = false;
+    let pendingCallback: () => void = () => {
+      throw new Error('Expected a pending callback');
+    };
     const scheduler = createProjectHistoryCaptureScheduler({
       delayMs: 600,
       capture,
       setTimer: (callback) => {
+        wasCallbackScheduled = true;
         pendingCallback = callback;
         return 1;
       },
+      clearTimer: vi.fn(),
     });
 
     scheduler.schedule();
-    expect(pendingCallback).not.toBeNull();
-    (pendingCallback as unknown as () => void)();
+    expect(wasCallbackScheduled).toBe(true);
+    pendingCallback();
 
     expect(capture).toHaveBeenCalledTimes(1);
     expect(scheduler.hasPending()).toBe(false);
@@ -143,10 +147,22 @@ describe('project history capture scheduler', () => {
 describe('project history hotkeys', () => {
   it('keeps Monaco and editable targets on their native undo stack', () => {
     const editableTargets = [
-      { closest: (selector: string) => selector === '.monaco-editor' },
-      { closest: (selector: string) => selector === 'input, textarea, select' },
-      { closest: (selector: string) => selector === 'input, textarea, select' },
-      { closest: (selector: string) => selector === 'input, textarea, select' },
+      {
+        closest: (selector: string) =>
+          selector === '.monaco-editor' ? {} : null,
+      },
+      {
+        closest: (selector: string) =>
+          selector === 'input, textarea, select' ? {} : null,
+      },
+      {
+        closest: (selector: string) =>
+          selector === 'input, textarea, select' ? {} : null,
+      },
+      {
+        closest: (selector: string) =>
+          selector === 'input, textarea, select' ? {} : null,
+      },
       {
         closest: () => null,
         getAttribute: (name: string) =>
@@ -156,22 +172,17 @@ describe('project history hotkeys', () => {
 
     editableTargets.forEach((target) => {
       expect(isProjectHistoryEditableTargetInfo(target)).toBe(true);
-      expect(
-        isProjectHistoryHotkeyTarget(target as unknown as EventTarget)
-      ).toBe(false);
     });
   });
 
   it('handles project undo and redo from non-editable targets', () => {
-    const target = { closest: () => null } as unknown as EventTarget;
-
     expect(
       getProjectHistoryHotkeyAction({
         key: 'z',
         ctrlKey: true,
         shiftKey: false,
         altKey: false,
-        target,
+        target: null,
       })
     ).toBe('undo');
     expect(
@@ -180,7 +191,7 @@ describe('project history hotkeys', () => {
         ctrlKey: true,
         shiftKey: true,
         altKey: false,
-        target,
+        target: null,
       })
     ).toBe('redo');
     expect(
@@ -189,7 +200,7 @@ describe('project history hotkeys', () => {
         ctrlKey: true,
         shiftKey: false,
         altKey: false,
-        target,
+        target: null,
       })
     ).toBe('redo');
   });

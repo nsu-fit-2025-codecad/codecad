@@ -89,6 +89,13 @@ export const HomePage = () => {
     });
   }
 
+  useEffect(
+    () => () => {
+      codeHistorySchedulerRef.current?.cancel();
+    },
+    []
+  );
+
   const { parameters, replaceAll: replaceAllParameters } = useParametersStore();
   const {
     update,

@@ -8,15 +8,15 @@ interface ProjectHistoryHotkeyEvent {
   target: EventTarget | null;
 }
 
-interface ProjectHistoryTargetLike {
-  closest: (selector: string) => unknown;
-  parentElement?: ProjectHistoryTargetLike | null;
+interface ProjectHistoryEditableTargetInfo {
+  closest: (selector: string) => object | null;
+  parentElement?: ProjectHistoryEditableTargetInfo | null;
   isContentEditable?: boolean;
   getAttribute?: (name: string) => string | null;
 }
 
 export const isProjectHistoryEditableTargetInfo = (
-  element: ProjectHistoryTargetLike
+  element: ProjectHistoryEditableTargetInfo
 ) => {
   if (element.closest('.monaco-editor')) {
     return true;
@@ -26,7 +26,7 @@ export const isProjectHistoryEditableTargetInfo = (
     return true;
   }
 
-  let currentElement: ProjectHistoryTargetLike | null = element;
+  let currentElement: ProjectHistoryEditableTargetInfo | null = element;
 
   while (currentElement) {
     const contentEditableAttribute =
@@ -46,14 +46,15 @@ export const isProjectHistoryEditableTargetInfo = (
   return false;
 };
 
+const isElementTarget = (target: EventTarget | null): target is Element =>
+  typeof Element !== 'undefined' && target instanceof Element;
+
 export const isProjectHistoryHotkeyTarget = (target: EventTarget | null) => {
-  if (typeof target !== 'object' || target === null || !('closest' in target)) {
+  if (!isElementTarget(target)) {
     return true;
   }
 
-  return !isProjectHistoryEditableTargetInfo(
-    target as unknown as ProjectHistoryTargetLike
-  );
+  return !isProjectHistoryEditableTargetInfo(target);
 };
 
 export const getProjectHistoryHotkeyAction = (
