@@ -49,28 +49,6 @@ export const Toolbar = ({
     <Card className={cn(className)}>
       <CardContent className="p-2 flex items-center gap-2">
         <Button
-          variant={isModelsPaneOpen ? 'default' : 'outline'}
-          onClick={toggleModelsPane}
-          className="cursor-pointer"
-          size="icon"
-          title={isModelsPaneOpen ? 'Close Models pane' : 'Open Models pane'}
-        >
-          <Boxes />
-        </Button>
-        <Button
-          variant={isParametersPaneOpen ? 'default' : 'outline'}
-          onClick={toggleParametersPane}
-          className="cursor-pointer"
-          size="icon"
-          title={
-            isParametersPaneOpen
-              ? 'Close Parameters pane'
-              : 'Open Parameters pane'
-          }
-        >
-          <SlidersHorizontal />
-        </Button>
-        <Button
           variant="outline"
           onClick={onUndoProject}
           className="cursor-pointer"
@@ -91,6 +69,28 @@ export const Toolbar = ({
           disabled={!canRedoProject}
         >
           <Redo2 />
+        </Button>
+        <Button
+          variant={isModelsPaneOpen ? 'default' : 'outline'}
+          onClick={toggleModelsPane}
+          className="cursor-pointer"
+          size="icon"
+          title={isModelsPaneOpen ? 'Close Models pane' : 'Open Models pane'}
+        >
+          <Boxes />
+        </Button>
+        <Button
+          variant={isParametersPaneOpen ? 'default' : 'outline'}
+          onClick={toggleParametersPane}
+          className="cursor-pointer"
+          size="icon"
+          title={
+            isParametersPaneOpen
+              ? 'Close Parameters pane'
+              : 'Open Parameters pane'
+          }
+        >
+          <SlidersHorizontal />
         </Button>
         <Button
           variant="outline"
