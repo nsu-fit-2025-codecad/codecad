@@ -47,7 +47,15 @@ const addParameterFormSchema = (existingNames: string[]) =>
 
 type AddParameterFormData = z.infer<ReturnType<typeof addParameterFormSchema>>;
 
-export const AddParameterDialog = () => {
+interface AddParameterDialogProps {
+  onBeforeCommit?: () => void;
+  onCommit?: () => void;
+}
+
+export const AddParameterDialog = ({
+  onBeforeCommit,
+  onCommit,
+}: AddParameterDialogProps) => {
   const [open, setOpen] = useState(false);
 
   const { parameters, add } = useParametersStore();
@@ -66,9 +74,11 @@ export const AddParameterDialog = () => {
   });
 
   function onSubmit(data: AddParameterFormData) {
+    onBeforeCommit?.();
     add({
       ...data,
     });
+    onCommit?.();
     setOpen(false);
   }
 

@@ -24,6 +24,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parameter: Parameter | null;
+  onBeforeCommit?: () => void;
+  onCommit?: () => void;
 }
 
 type EditParameterFormData = z.infer<
@@ -57,6 +59,8 @@ export const EditParameterDialog = ({
   open,
   onOpenChange,
   parameter,
+  onBeforeCommit,
+  onCommit,
 }: Props) => {
   const { parameters, edit } = useParametersStore();
 
@@ -84,7 +88,9 @@ export const EditParameterDialog = ({
   function onSubmit(data: EditParameterFormData) {
     if (!parameter) return;
 
+    onBeforeCommit?.();
     edit(parameter.name, data);
+    onCommit?.();
     onOpenChange(false);
   }
 

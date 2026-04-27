@@ -16,12 +16,16 @@ import React from 'react';
 interface ModelsPaneProps {
   onExportDXF: () => void;
   onClose: () => void;
+  onSelectModel?: (modelId: string) => void;
+  onClearSelectedModel?: () => void;
   className?: string;
 }
 
 export const ModelsPane = ({
   onExportDXF,
   onClose,
+  onSelectModel,
+  onClearSelectedModel,
   className,
 }: ModelsPaneProps) => {
   const { models, selectedModelId, selectModel, clearSelectedModel } =
@@ -29,11 +33,11 @@ export const ModelsPane = ({
 
   const toggleModelSelection = (modelId: string) => {
     if (selectedModelId === modelId) {
-      clearSelectedModel();
+      (onClearSelectedModel ?? clearSelectedModel)();
       return;
     }
 
-    selectModel(modelId);
+    (onSelectModel ?? selectModel)(modelId);
   };
 
   return (

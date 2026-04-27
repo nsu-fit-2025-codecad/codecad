@@ -12,11 +12,21 @@ import { X } from 'lucide-react';
 
 interface ParametersPaneProps {
   onClose: () => void;
+  onParameterValueChange?: (name: string, value: number) => void;
+  onBeforeParameterCommit?: () => void;
+  onParameterCommit?: () => void;
   className?: string;
 }
 
-export const ParametersPane = ({ onClose, className }: ParametersPaneProps) => {
+export const ParametersPane = ({
+  onClose,
+  onParameterValueChange,
+  onBeforeParameterCommit,
+  onParameterCommit,
+  className,
+}: ParametersPaneProps) => {
   const { parameters, updateValue } = useParametersStore();
+  const updateParameterValue = onParameterValueChange ?? updateValue;
 
   const [editingParameter, setEditingParameter] = useState<Parameter | null>(
     null
@@ -38,7 +48,10 @@ export const ParametersPane = ({ onClose, className }: ParametersPaneProps) => {
           </Button>
         </div>
         <div className="flex gap-4">
-          <AddParameterDialog />
+          <AddParameterDialog
+            onBeforeCommit={onBeforeParameterCommit}
+            onCommit={onParameterCommit}
+          />
         </div>
       </CardHeader>
       <ScrollArea className="w-full">
@@ -48,7 +61,9 @@ export const ParametersPane = ({ onClose, className }: ParametersPaneProps) => {
               <ParameterControl
                 key={parameter.name}
                 parameter={parameter}
-                updateValue={updateValue}
+                updateValue={updateParameterValue}
+                onBeforeCommit={onBeforeParameterCommit}
+                onCommit={onParameterCommit}
                 onEdit={(param) => {
                   setEditingParameter(param);
                   setIsEditOpen(true);
@@ -62,6 +77,8 @@ export const ParametersPane = ({ onClose, className }: ParametersPaneProps) => {
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         parameter={editingParameter}
+        onBeforeCommit={onBeforeParameterCommit}
+        onCommit={onParameterCommit}
       />
     </Card>
   );
