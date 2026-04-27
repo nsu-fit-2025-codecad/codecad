@@ -2,11 +2,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
-import { Boxes, Package, Shapes, SlidersHorizontal } from 'lucide-react';
+import {
+  Boxes,
+  Package,
+  Share2,
+  Shapes,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface ToolbarProps {
   onRunNesting: () => void;
+  onCopyShareUrl: () => void;
   onToggleDemoGuide: () => void;
   isNesting?: boolean;
   isDemoGuideOpen?: boolean;
@@ -15,6 +22,7 @@ interface ToolbarProps {
 
 export const Toolbar = ({
   onRunNesting,
+  onCopyShareUrl,
   onToggleDemoGuide,
   isNesting = false,
   isDemoGuideOpen = false,
@@ -61,6 +69,16 @@ export const Toolbar = ({
           disabled={isNesting}
         >
           <Package />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onCopyShareUrl}
+          className="cursor-pointer"
+          size="icon"
+          title="Copy Share URL"
+          aria-label="Copy Share URL"
+        >
+          <Share2 />
         </Button>
         <Button
           variant={isDemoGuideOpen ? 'default' : 'outline'}

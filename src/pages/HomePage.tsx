@@ -1,5 +1,6 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import makerjs, { IModel } from 'makerjs';
+import { toast } from 'sonner';
 import { ParametersPane } from '@/components/parameters-pane';
 import { useEditorStore, useParametersStore } from '@/store/store';
 import { cad, normalizeEditorModelResult } from '@/lib/cad';
@@ -20,6 +21,12 @@ import {
   type MvpDemoNestingPresetId,
   type MvpDemoSceneId,
 } from '@/lib/demo/mvp-demo';
+import { hydrateProjectState } from '@/lib/project-state/hydrate';
+import {
+  createProjectShareUrl,
+  readProjectStateFromUrl,
+  removeProjectStateFromUrl,
+} from '@/lib/project-state/share-url';
 import { cn } from '@/lib/utils';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
@@ -46,14 +53,16 @@ export const HomePage = () => {
     useState<MvpDemoSceneId | null>(null);
   const modelRevisionRef = useRef(0);
 
-  const { replaceAll: replaceAllParameters } = useParametersStore();
+  const { parameters, replaceAll: replaceAllParameters } = useParametersStore();
   const {
     update,
     updateFitStatus,
     selectedModelId,
     models: availableModels,
+    selectModel,
+    clearSelectedModel,
   } = useModelsStore();
-  const { code, editCode, settings } = useEditorStore();
+  const { code, editCode, settings, editSettings } = useEditorStore();
   const {
     isModelsPaneOpen,
     isParametersPaneOpen,
@@ -175,7 +184,7 @@ export const HomePage = () => {
     evaluateSourceCode(code);
   }, [code, evaluateSourceCode]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!settings.autorun || !code) {
       return;
     }
@@ -188,6 +197,54 @@ export const HomePage = () => {
       clearTimeout(timeoutId);
     };
   }, [code, evaluateSourceCode, settings.autorun]);
+
+  useEffect(() => {
+    const sharedState = readProjectStateFromUrl();
+
+    if (!sharedState) {
+      return;
+    }
+
+    hydrateProjectState({
+      state: sharedState,
+      replaceParameters: replaceAllParameters,
+      editCode,
+      editSettings,
+      setNestingOptions,
+      evaluateSourceCode,
+      selectTargetModel: selectModel,
+      clearSelectedTargetModel: clearSelectedModel,
+    });
+
+    window.history.replaceState(
+      null,
+      '',
+      removeProjectStateFromUrl(window.location.href)
+    );
+    // Import runs once on mount; the URL cleanup prevents StrictMode remounts
+    // from applying the same share payload twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const copyShareUrl = useCallback(async () => {
+    const shareUrl = createProjectShareUrl({
+      code: code ?? '',
+      parameters,
+      editorSettings: {
+        autorun: settings.autorun,
+      },
+      nestingOptions,
+      selectedTargetModelId: selectedModelId,
+    });
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Share URL copied');
+    } catch (nextError) {
+      console.error('Failed to copy share URL:', nextError);
+      toast.error('Could not copy Share URL');
+    }
+  }, [code, nestingOptions, parameters, selectedModelId, settings.autorun]);
 
   const handleLoadDemoScene = useCallback(
     (sceneId: MvpDemoSceneId) => {
@@ -244,6 +301,7 @@ export const HomePage = () => {
       <Toolbar
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
         onRunNesting={runNesting}
+        onCopyShareUrl={copyShareUrl}
         onToggleDemoGuide={toggleDemoPane}
         isNesting={isRunning}
         isDemoGuideOpen={isDemoPaneOpen}
