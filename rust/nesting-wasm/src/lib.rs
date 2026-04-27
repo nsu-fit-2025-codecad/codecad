@@ -145,7 +145,7 @@ fn pack(input: NestInput) -> Result<NestOutput, String> {
     }
 
     let config = Config::new()
-        .with_strategy(Strategy::NfpGuided)
+        .with_strategy(Strategy::BottomLeftFill)
         .with_spacing(input.options.gap)
         .with_time_limit(0);
     let result = Nester2D::new(config)
