@@ -11,15 +11,32 @@ import {
 } from '@/lib/nesting/solver/rust-wasm/serializer';
 
 interface RustWasmModule {
+  default?: () => Promise<unknown>;
   run_nesting: (inputJson: string) => string;
 }
 
+let rustWasmModulePromise: Promise<RustWasmModule> | null = null;
+
 const loadRustWasmModule = async (): Promise<RustWasmModule> => {
+  if (rustWasmModulePromise) {
+    return rustWasmModulePromise;
+  }
+
+  rustWasmModulePromise = loadRustWasmModuleOnce();
+
+  return rustWasmModulePromise;
+};
+
+const loadRustWasmModuleOnce = async (): Promise<RustWasmModule> => {
   try {
     const modulePath = '/src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm.js';
-    const module = (await import(/* @vite-ignore */ modulePath)) as Partial<
-      RustWasmModule & { default?: unknown }
-    >;
+    const module = (await import(
+      /* @vite-ignore */ modulePath
+    )) as Partial<RustWasmModule>;
+
+    if (typeof module.default === 'function') {
+      await module.default();
+    }
 
     if (typeof module.run_nesting !== 'function') {
       throw new Error('run_nesting export is missing.');
@@ -29,6 +46,7 @@ const loadRustWasmModule = async (): Promise<RustWasmModule> => {
       run_nesting: module.run_nesting,
     };
   } catch (error) {
+    rustWasmModulePromise = null;
     const reason = error instanceof Error ? error.message : 'unknown error';
 
     throw new Error(
