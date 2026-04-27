@@ -147,7 +147,7 @@ fn pack(input: NestInput) -> Result<NestOutput, String> {
     let config = Config::new()
         .with_strategy(Strategy::NfpGuided)
         .with_spacing(input.options.gap)
-        .with_time_limit(5_000);
+        .with_time_limit(0);
     let result = Nester2D::new(config)
         .solve(&geometries, &boundary)
         .map_err(|error| format!("u-nesting-d2 solve failed: {error}"))?;
