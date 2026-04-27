@@ -19,7 +19,6 @@ CI uploads the same folder as the `nesting-wasm-pkg` workflow artifact. To use
 that build locally, download the artifact from a GitHub Actions run and extract
 its contents into the same `pkg` folder.
 
-The current Rust code is a minimal bounds-based prototype that verifies the
-worker, JSON, WASM, and placement mapping path. Replace the packing body with a
-real solver candidate once the local Rust toolchain and `wasm-pack` are
-available.
+The current Rust code adapts the app's JSON payload into `u-nesting-d2` and
+runs its `NfpGuided` strategy. It is still experimental until parity fixtures
+cover holes, concave parts, spacing, and rotations.

@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use u_nesting_d2::{Boundary2D, Config, Geometry2D, Nester2D, Solver, Strategy};
 use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Deserialize)]
@@ -9,16 +11,23 @@ struct Point {
 
 #[derive(Clone, Deserialize)]
 struct Bounds {
-    minX: f64,
-    minY: f64,
-    maxX: f64,
-    maxY: f64,
-    width: f64,
-    height: f64,
+    #[serde(rename = "minX")]
+    min_x: f64,
+    #[serde(rename = "minY")]
+    min_y: f64,
+    #[serde(rename = "maxX")]
+    _max_x: f64,
+    #[serde(rename = "maxY")]
+    _max_y: f64,
+    #[serde(rename = "width")]
+    _width: f64,
+    #[serde(rename = "height")]
+    _height: f64,
 }
 
 #[derive(Clone, Deserialize)]
 struct PolygonShape {
+    contours: Vec<Vec<Point>>,
     bounds: Bounds,
 }
 
@@ -52,68 +61,137 @@ struct NestPlacement {
 #[derive(Serialize)]
 struct NestOutput {
     placements: Vec<NestPlacement>,
-    notPlacedIds: Vec<String>,
+    #[serde(rename = "notPlacedIds")]
+    not_placed_ids: Vec<String>,
 }
 
-fn rotated_size(bounds: &Bounds, rotation: f64) -> (f64, f64) {
-    let normalized = rotation.rem_euclid(180.0);
+fn normalize_contour(contour: &[Point], offset_x: f64, offset_y: f64) -> Vec<(f64, f64)> {
+    contour
+        .iter()
+        .map(|point| (point.x - offset_x, point.y - offset_y))
+        .collect()
+}
 
-    if (normalized - 90.0).abs() < 1e-9 {
-        (bounds.height, bounds.width)
-    } else {
-        (bounds.width, bounds.height)
+fn build_boundary(shape: &PolygonShape) -> Result<Boundary2D, String> {
+    let exterior = shape
+        .contours
+        .first()
+        .ok_or_else(|| "Target has no exterior contour.".to_string())?;
+    let mut boundary = Boundary2D::new(normalize_contour(
+        exterior,
+        shape.bounds.min_x,
+        shape.bounds.min_y,
+    ));
+
+    for hole in shape.contours.iter().skip(1) {
+        boundary = boundary.with_hole(normalize_contour(
+            hole,
+            shape.bounds.min_x,
+            shape.bounds.min_y,
+        ));
     }
+
+    Ok(boundary)
 }
 
-fn pack(input: NestInput) -> NestOutput {
-    let target = input.target.bounds;
-    let mut cursor_x = target.minX;
-    let mut cursor_y = target.minY;
-    let mut row_height = 0.0;
-    let mut placements = Vec::new();
+fn build_geometry(part: &NestPart, rotations_deg: &[f64]) -> Result<Geometry2D, String> {
+    let exterior = part
+        .shape
+        .contours
+        .first()
+        .ok_or_else(|| format!("Part {} has no exterior contour.", part.id))?;
+    let mut geometry = Geometry2D::new(part.id.clone())
+        .with_polygon(normalize_contour(
+            exterior,
+            part.shape.bounds.min_x,
+            part.shape.bounds.min_y,
+        ))
+        .with_quantity(1)
+        .with_rotations_deg(rotations_deg.to_vec());
+
+    for hole in part.shape.contours.iter().skip(1) {
+        geometry = geometry.with_hole(normalize_contour(
+            hole,
+            part.shape.bounds.min_x,
+            part.shape.bounds.min_y,
+        ));
+    }
+
+    Ok(geometry)
+}
+
+fn pack(input: NestInput) -> Result<NestOutput, String> {
+    let rotations = if input.options.rotations.is_empty() {
+        vec![0.0]
+    } else {
+        input.options.rotations.clone()
+    };
+    let boundary = build_boundary(&input.target)?;
+    let mut geometries = Vec::with_capacity(input.parts.len());
+
+    for part in &input.parts {
+        geometries.push(build_geometry(part, &rotations)?);
+    }
+
+    let config = Config::new()
+        .with_strategy(Strategy::NfpGuided)
+        .with_spacing(input.options.gap)
+        .with_time_limit(5_000);
+    let result = Nester2D::new(config)
+        .solve(&geometries, &boundary)
+        .map_err(|error| format!("u-nesting-d2 solve failed: {error}"))?;
+    let placed_ids: HashSet<String> = result
+        .placements
+        .iter()
+        .map(|placement| placement.geometry_id.clone())
+        .collect();
     let mut not_placed_ids = Vec::new();
 
-    for part in input.parts {
-        let rotation = input.options.rotations.first().copied().unwrap_or(0.0);
-        let (width, height) = rotated_size(&part.shape.bounds, rotation);
-
-        if width > target.width || height > target.height {
-            not_placed_ids.push(part.id);
-            continue;
+    for part in &input.parts {
+        if !placed_ids.contains(&part.id) {
+            not_placed_ids.push(part.id.clone());
         }
-
-        if cursor_x + width > target.maxX {
-            cursor_x = target.minX;
-            cursor_y += row_height + input.options.gap;
-            row_height = 0.0;
-        }
-
-        if cursor_y + height > target.maxY {
-            not_placed_ids.push(part.id);
-            continue;
-        }
-
-        placements.push(NestPlacement {
-            id: part.id,
-            x: cursor_x - part.shape.bounds.minX,
-            y: cursor_y - part.shape.bounds.minY,
-            rotation,
-        });
-        cursor_x += width + input.options.gap;
-        row_height = row_height.max(height);
     }
 
-    NestOutput {
-        placements,
-        notPlacedIds: not_placed_ids,
+    for id in result.unplaced {
+        if !not_placed_ids.contains(&id) {
+            not_placed_ids.push(id);
+        }
     }
+
+    Ok(NestOutput {
+        placements: result
+            .placements
+            .into_iter()
+            .map(|placement| {
+                let id = placement.geometry_id.clone();
+                let x = placement.x();
+                let y = placement.y();
+                let rotation = placement.angle().to_degrees();
+                let part = input
+                    .parts
+                    .iter()
+                    .find(|candidate| candidate.id == id);
+                let part_min_x = part.map(|candidate| candidate.shape.bounds.min_x).unwrap_or(0.0);
+                let part_min_y = part.map(|candidate| candidate.shape.bounds.min_y).unwrap_or(0.0);
+
+                NestPlacement {
+                    id,
+                    x: input.target.bounds.min_x + x - part_min_x,
+                    y: input.target.bounds.min_y + y - part_min_y,
+                    rotation,
+                }
+            })
+            .collect(),
+        not_placed_ids,
+    })
 }
 
 #[wasm_bindgen]
 pub fn run_nesting(input_json: &str) -> Result<String, JsValue> {
     let input: NestInput = serde_json::from_str(input_json)
         .map_err(|error| JsValue::from_str(&format!("Invalid nesting input: {error}")))?;
-    let output = pack(input);
+    let output = pack(input).map_err(|error| JsValue::from_str(&error))?;
 
     serde_json::to_string(&output)
         .map_err(|error| JsValue::from_str(&format!("Invalid nesting output: {error}")))

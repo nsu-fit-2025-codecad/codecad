@@ -11,7 +11,12 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
-    ignores: ['dist/**', 'build/**', 'node_modules/**'],
+    ignores: [
+      'dist/**',
+      'build/**',
+      'node_modules/**',
+      'src/lib/nesting/solver/rust-wasm/pkg/**',
+    ],
   },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
