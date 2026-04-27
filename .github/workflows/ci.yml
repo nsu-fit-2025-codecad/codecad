@@ -155,9 +155,11 @@ jobs:
       - name: Smoke test WASM nesting package
         run: |
           node --input-type=module <<'EOF'
+          import { readFile } from 'node:fs/promises';
           import init, { run_nesting } from './src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm.js';
 
-          await init();
+          const wasmBytes = await readFile('./src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm_bg.wasm');
+          await init(wasmBytes);
 
           const rectangle = (id, width, height) => ({
             id,
