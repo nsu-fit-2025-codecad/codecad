@@ -31,7 +31,7 @@ const formatEngine = (stats: NestingRunStats) => {
   }
 
   return stats.engine === 'rust-wasm'
-    ? 'Rust/WASM experimental'
+    ? 'Rust/WASM SVGnest experimental'
     : 'TypeScript stable';
 };
 

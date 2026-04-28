@@ -9,7 +9,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "check": "npm run lint && npm run test && npm run build",
-    "wasm:build": "wasm-pack build rust/nesting-wasm --target web --release --out-dir ../../src/lib/nesting/solver/rust-wasm/pkg",
+    "wasm:build": "node scripts/build-svgnest-wasm.mjs",
     "serve": "vite preview",
     "pre-commit": "lint-staged",
     "prepare": "husky install"

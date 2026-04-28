@@ -152,73 +152,19 @@ jobs:
       - name: Build WASM nesting package
         run: npm run wasm:build
 
-      - name: Smoke test WASM nesting package
-        run: |
-          node --input-type=module <<'EOF'
-          import { readFile } from 'node:fs/promises';
-          import init, { run_nesting } from './src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm.js';
+      - name: Smoke test SVGnest WASM nesting package
+        run: npx vitest run src/lib/nesting/solver/rust-wasm/svgnest-runner.integration.test.ts
+        env:
+          SVGNEST_WASM_REQUIRED: 'true'
 
-          const wasmBytes = await readFile('./src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm_bg.wasm');
-          await init(wasmBytes);
-
-          const rectangle = (id, width, height) => ({
-            id,
-            shape: {
-              contours: [[
-                { x: 0, y: 0 },
-                { x: width, y: 0 },
-                { x: width, y: height },
-                { x: 0, y: height }
-              ]],
-              bounds: {
-                minX: 0,
-                minY: 0,
-                maxX: width,
-                maxY: height,
-                width,
-                height
-              },
-              area: width * height
-            }
-          });
-
-          const input = {
-            target: {
-              contours: [[
-                { x: 0, y: 0 },
-                { x: 100, y: 0 },
-                { x: 100, y: 80 },
-                { x: 0, y: 80 }
-              ]],
-              bounds: {
-                minX: 0,
-                minY: 0,
-                maxX: 100,
-                maxY: 80,
-                width: 100,
-                height: 80
-              },
-              area: 8000
-            },
-            parts: [rectangle('part-a', 30, 20)],
-            options: {
-              gap: 0,
-              rotations: [0]
-            }
-          };
-
-          const output = JSON.parse(run_nesting(JSON.stringify(input)));
-
-          if (!Array.isArray(output.placements) || output.placements.length !== 1) {
-            throw new Error(`Expected one placement, got ${JSON.stringify(output)}`);
-          }
-          EOF
+      - name: Verify committed SVGnest WASM artifact
+        run: git diff --exit-code -- public/nesting/polygon-packer.wasm
 
       - name: Upload WASM nesting package
         uses: actions/upload-artifact@v4
         with:
-          name: nesting-wasm-pkg
-          path: src/lib/nesting/solver/rust-wasm/pkg
+          name: polygon-packer-wasm
+          path: public/nesting/polygon-packer.wasm
           if-no-files-found: error
 
       - name: Build

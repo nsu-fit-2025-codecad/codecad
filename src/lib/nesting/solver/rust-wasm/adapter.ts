@@ -4,55 +4,28 @@ import type {
   PreparedNestInput,
 } from '@/lib/nesting/orchestration/runtime-types';
 import type { AsyncNestingSolverAdapter } from '@/lib/nesting/solver/solver-types';
-import {
-  mapRustWasmOutputToNestResult,
-  serializeRustWasmInput,
-  type RustWasmNestingOutput,
-} from '@/lib/nesting/solver/rust-wasm/serializer';
+import { runSvgNest } from '@/lib/nesting/solver/rust-wasm/svgnest-runner';
 
-interface RustWasmModule {
-  default?: () => Promise<unknown>;
-  run_nesting: (inputJson: string) => string;
-}
+const WASM_URL = '/nesting/polygon-packer.wasm';
 
-let rustWasmModulePromise: Promise<RustWasmModule> | null = null;
+let wasmBytesPromise: Promise<ArrayBuffer> | null = null;
 
-const loadRustWasmModule = async (): Promise<RustWasmModule> => {
-  if (rustWasmModulePromise) {
-    return rustWasmModulePromise;
+const loadWasmBytes = async () => {
+  if (wasmBytesPromise) {
+    return wasmBytesPromise;
   }
 
-  rustWasmModulePromise = loadRustWasmModuleOnce();
-
-  return rustWasmModulePromise;
-};
-
-const loadRustWasmModuleOnce = async (): Promise<RustWasmModule> => {
-  try {
-    const modulePath = '/src/lib/nesting/solver/rust-wasm/pkg/nesting_wasm.js';
-    const module = (await import(
-      /* @vite-ignore */ modulePath
-    )) as Partial<RustWasmModule>;
-
-    if (typeof module.default === 'function') {
-      await module.default();
+  wasmBytesPromise = fetch(WASM_URL).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load SVGnest WASM from ${WASM_URL}: ${response.status}`
+      );
     }
 
-    if (typeof module.run_nesting !== 'function') {
-      throw new Error('run_nesting export is missing.');
-    }
+    return response.arrayBuffer();
+  });
 
-    return {
-      run_nesting: module.run_nesting,
-    };
-  } catch (error) {
-    rustWasmModulePromise = null;
-    const reason = error instanceof Error ? error.message : 'unknown error';
-
-    throw new Error(
-      `Rust/WASM nesting engine is not available. Build the wasm package first. ${reason}`
-    );
-  }
+  return wasmBytesPromise;
 };
 
 export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
@@ -64,18 +37,19 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
     callbacks.onProgress?.({
       phase: 'placing',
       progress: 0.35,
-      message: 'Running Rust/WASM nesting engine',
+      message: 'Running SVGnest WASM nesting engine',
     });
 
-    const wasmModule = await loadRustWasmModule();
-    const input = serializeRustWasmInput(prepared, options);
-    let output: RustWasmNestingOutput;
+    let placementResult;
 
     try {
-      output = JSON.parse(
-        wasmModule.run_nesting(JSON.stringify(input))
-      ) as RustWasmNestingOutput;
+      placementResult = await runSvgNest(
+        prepared,
+        options,
+        await loadWasmBytes()
+      );
     } catch (error) {
+      wasmBytesPromise = null;
       const reason = error instanceof Error ? error.message : String(error);
 
       throw new Error(`Rust/WASM nesting failed. ${reason}`);
@@ -84,10 +58,8 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
     callbacks.onProgress?.({
       phase: 'placing',
       progress: 0.95,
-      message: 'Rust/WASM nesting finished',
+      message: 'SVGnest WASM nesting finished',
     });
-
-    const placementResult = mapRustWasmOutputToNestResult(prepared, output);
 
     return {
       algorithm: 'deterministic',
