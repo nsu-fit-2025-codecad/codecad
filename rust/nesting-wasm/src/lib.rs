@@ -1,40 +1,28 @@
-use jagua_rs::io::ext_repr::{
-    ExtItem as JaguaExtItem, ExtPolygon, ExtSPolygon, ExtShape,
-};
-use jagua_rs::io::import::Importer;
-use jagua_rs::probs::spp::io::ext_repr::{
-    ExtItem as StripExtItem, ExtSPInstance,
-};
-use rand::SeedableRng;
-use rand_xoshiro::Xoshiro256PlusPlus;
 use serde::{Deserialize, Serialize};
-use sparrow::config::DEFAULT_SPARROW_CONFIG;
-use sparrow::optimizer::optimize;
-use sparrow::util::listener::DummySolListener;
-use sparrow::util::terminator::Terminator;
+use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
-#[derive(Clone, Deserialize)]
+const EPSILON: f64 = 1e-9;
+const DEDUPE_SCALE: f64 = 100_000.0;
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
 struct Point {
     x: f64,
     y: f64,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 struct Bounds {
     #[serde(rename = "minX")]
     min_x: f64,
     #[serde(rename = "minY")]
     min_y: f64,
     #[serde(rename = "maxX")]
-    _max_x: f64,
+    max_x: f64,
     #[serde(rename = "maxY")]
-    _max_y: f64,
-    #[serde(rename = "width")]
+    max_y: f64,
     width: f64,
-    #[serde(rename = "height")]
     height: f64,
 }
 
@@ -54,7 +42,6 @@ struct NestPart {
 struct NestOptions {
     gap: f64,
     rotations: Vec<f64>,
-    seed: Option<u64>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -79,114 +66,669 @@ struct NestOutput {
     not_placed_ids: Vec<String>,
 }
 
-struct WasmTerminator {
-    timeout: Option<jagua_rs::Instant>,
+#[derive(Clone)]
+struct Shape {
+    contours: Vec<Vec<Point>>,
+    bounds: Bounds,
+    area: f64,
 }
 
-impl WasmTerminator {
-    fn new() -> Self {
-        Self { timeout: None }
+#[derive(Clone)]
+struct PlacedPart {
+    id: String,
+    x: f64,
+    y: f64,
+    rotation: f64,
+    shape: Shape,
+}
+
+#[derive(Clone)]
+struct Candidate {
+    x: f64,
+    y: f64,
+    shape: Shape,
+    score: CandidateScore,
+}
+
+#[derive(Clone, Copy)]
+struct CandidateScore {
+    max_y: f64,
+    max_x: f64,
+    y: f64,
+    x: f64,
+}
+
+fn bounds_from_points(points: impl Iterator<Item = Point>) -> Bounds {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    let mut has_point = false;
+
+    for point in points {
+        has_point = true;
+        min_x = min_x.min(point.x);
+        min_y = min_y.min(point.y);
+        max_x = max_x.max(point.x);
+        max_y = max_y.max(point.y);
+    }
+
+    if !has_point {
+        return Bounds {
+            min_x: 0.0,
+            min_y: 0.0,
+            max_x: 0.0,
+            max_y: 0.0,
+            width: 0.0,
+            height: 0.0,
+        };
+    }
+
+    Bounds {
+        min_x,
+        min_y,
+        max_x,
+        max_y,
+        width: max_x - min_x,
+        height: max_y - min_y,
     }
 }
 
-impl Terminator for WasmTerminator {
-    fn kill(&self) -> bool {
-        self.timeout
-            .map_or(false, |timeout| jagua_rs::Instant::now() > timeout)
+fn contour_area(contour: &[Point]) -> f64 {
+    if contour.len() < 3 {
+        return 0.0;
     }
 
-    fn new_timeout(&mut self, timeout: Duration) {
-        self.timeout = Some(jagua_rs::Instant::now() + timeout);
+    let mut area = 0.0;
+    for index in 0..contour.len() {
+        let current = contour[index];
+        let next = contour[(index + 1) % contour.len()];
+        area += current.x * next.y - next.x * current.y;
     }
 
-    fn timeout_at(&self) -> Option<jagua_rs::Instant> {
-        self.timeout
+    area / 2.0
+}
+
+fn create_shape(contours: Vec<Vec<Point>>) -> Shape {
+    let bounds = bounds_from_points(contours.iter().flatten().copied());
+    let area = contours.iter().map(|contour| contour_area(contour)).sum::<f64>().abs();
+
+    Shape {
+        contours,
+        bounds,
+        area,
     }
 }
 
-fn normalize_contour(contour: &[Point], offset_x: f64, offset_y: f64) -> ExtSPolygon {
-    ExtSPolygon(
-        contour
+fn normalize_source_shape(shape: &PolygonShape) -> Shape {
+    create_shape(
+        shape
+            .contours
             .iter()
-            .map(|point| ((point.x - offset_x) as f32, (point.y - offset_y) as f32))
+            .map(|contour| {
+                contour
+                    .iter()
+                    .map(|point| Point {
+                        x: point.x - shape.bounds.min_x,
+                        y: point.y - shape.bounds.min_y,
+                    })
+                    .collect()
+            })
             .collect(),
     )
 }
 
-fn build_shape(shape: &PolygonShape) -> Result<ExtShape, String> {
-    let exterior = shape
-        .contours
-        .first()
-        .ok_or_else(|| "Shape has no exterior contour.".to_string())?;
-    let outer = normalize_contour(exterior, shape.bounds.min_x, shape.bounds.min_y);
-
-    if shape.contours.len() <= 1 {
-        return Ok(ExtShape::SimplePolygon(outer));
-    }
-
-    Ok(ExtShape::Polygon(ExtPolygon {
-        outer,
-        inner: shape
-            .contours
-            .iter()
-            .skip(1)
-            .map(|hole| normalize_contour(hole, shape.bounds.min_x, shape.bounds.min_y))
-            .collect(),
-    }))
+fn target_shape(shape: &PolygonShape) -> Shape {
+    create_shape(shape.contours.clone())
 }
 
-fn build_instance(input: &NestInput) -> Result<ExtSPInstance, String> {
-    let rotations = if input.options.rotations.is_empty() {
-        vec![0.0]
-    } else {
-        input.options.rotations.clone()
-    };
-    Ok(ExtSPInstance {
-        name: "code-cad".to_string(),
-        strip_height: input.target.bounds.height as f32,
-        items: input
-            .parts
+fn rotate_shape(shape: &Shape, rotation: f64) -> Shape {
+    if rotation.abs() <= EPSILON {
+        return shape.clone();
+    }
+
+    let radians = rotation.to_radians();
+    let cos = radians.cos();
+    let sin = radians.sin();
+
+    create_shape(
+        shape
+            .contours
             .iter()
-            .enumerate()
-            .map(|(index, part)| {
-                Ok(StripExtItem {
-                    base: JaguaExtItem {
-                        id: index as u64,
-                        allowed_orientations: Some(
-                            rotations.iter().map(|rotation| *rotation as f32).collect(),
-                        ),
-                        shape: build_shape(&part.shape)?,
-                        min_quality: None,
-                    },
-                    demand: 1,
-                })
+            .map(|contour| {
+                contour
+                    .iter()
+                    .map(|point| Point {
+                        x: point.x * cos - point.y * sin,
+                        y: point.x * sin + point.y * cos,
+                    })
+                    .collect()
             })
-            .collect::<Result<Vec<_>, String>>()?,
+            .collect(),
+    )
+}
+
+fn translate_shape(shape: &Shape, dx: f64, dy: f64) -> Shape {
+    create_shape(
+        shape
+            .contours
+            .iter()
+            .map(|contour| {
+                contour
+                    .iter()
+                    .map(|point| Point {
+                        x: point.x + dx,
+                        y: point.y + dy,
+                    })
+                    .collect()
+            })
+            .collect(),
+    )
+}
+
+fn normalize_shape_for_rotation(shape: &Shape, rotation: f64) -> Shape {
+    let rotated = rotate_shape(shape, rotation);
+    translate_shape(&rotated, -rotated.bounds.min_x, -rotated.bounds.min_y)
+}
+
+fn signed_cross(a: Point, b: Point, c: Point) -> f64 {
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+fn is_point_on_segment(point: Point, a: Point, b: Point) -> bool {
+    if signed_cross(a, b, point).abs() > EPSILON {
+        return false;
+    }
+
+    (point.x - a.x) * (point.x - b.x) + (point.y - a.y) * (point.y - b.y) <= EPSILON
+}
+
+fn segments_cross_strict(a1: Point, a2: Point, b1: Point, b2: Point) -> bool {
+    let d1 = signed_cross(a1, a2, b1);
+    let d2 = signed_cross(a1, a2, b2);
+    let d3 = signed_cross(b1, b2, a1);
+    let d4 = signed_cross(b1, b2, a2);
+
+    ((d1 > EPSILON && d2 < -EPSILON) || (d1 < -EPSILON && d2 > EPSILON))
+        && ((d3 > EPSILON && d4 < -EPSILON) || (d3 < -EPSILON && d4 > EPSILON))
+}
+
+fn segments_intersect(a1: Point, a2: Point, b1: Point, b2: Point) -> bool {
+    segments_cross_strict(a1, a2, b1, b2)
+        || is_point_on_segment(b1, a1, a2)
+        || is_point_on_segment(b2, a1, a2)
+        || is_point_on_segment(a1, b1, b2)
+        || is_point_on_segment(a2, b1, b2)
+}
+
+fn point_to_segment_distance(point: Point, a: Point, b: Point) -> f64 {
+    let ab_x = b.x - a.x;
+    let ab_y = b.y - a.y;
+    let ab_len_sq = ab_x * ab_x + ab_y * ab_y;
+
+    if ab_len_sq <= EPSILON {
+        return ((point.x - a.x).powi(2) + (point.y - a.y).powi(2)).sqrt();
+    }
+
+    let projection = ((point.x - a.x) * ab_x + (point.y - a.y) * ab_y) / ab_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = Point {
+        x: a.x + ab_x * t,
+        y: a.y + ab_y * t,
+    };
+
+    ((point.x - closest.x).powi(2) + (point.y - closest.y).powi(2)).sqrt()
+}
+
+fn segment_distance(a1: Point, a2: Point, b1: Point, b2: Point) -> f64 {
+    if segments_intersect(a1, a2, b1, b2) {
+        return 0.0;
+    }
+
+    point_to_segment_distance(a1, b1, b2)
+        .min(point_to_segment_distance(a2, b1, b2))
+        .min(point_to_segment_distance(b1, a1, a2))
+        .min(point_to_segment_distance(b2, a1, a2))
+}
+
+fn contour_segments(contour: &[Point]) -> Vec<(Point, Point)> {
+    if contour.len() < 2 {
+        return Vec::new();
+    }
+
+    (0..contour.len())
+        .map(|index| (contour[index], contour[(index + 1) % contour.len()]))
+        .collect()
+}
+
+fn point_in_contour(point: Point, contour: &[Point]) -> bool {
+    if contour.len() < 3 {
+        return false;
+    }
+
+    let mut inside = false;
+    let mut previous = contour[contour.len() - 1];
+
+    for current in contour {
+        if is_point_on_segment(point, previous, *current) {
+            return true;
+        }
+
+        if (current.y > point.y) != (previous.y > point.y)
+            && point.x
+                < ((previous.x - current.x) * (point.y - current.y))
+                    / (previous.y - current.y)
+                    + current.x
+        {
+            inside = !inside;
+        }
+
+        previous = *current;
+    }
+
+    inside
+}
+
+fn point_in_polygon(point: Point, shape: &Shape) -> bool {
+    let mut winding = 0;
+
+    for contour in &shape.contours {
+        if !point_in_contour(point, contour) {
+            continue;
+        }
+
+        let area = contour_area(contour);
+        if area.abs() <= EPSILON {
+            continue;
+        }
+
+        winding += if area > 0.0 { 1 } else { -1 };
+    }
+
+    winding > 0
+}
+
+fn point_on_shape_boundary(point: Point, shape: &Shape) -> bool {
+    shape
+        .contours
+        .iter()
+        .flat_map(|contour| contour_segments(contour))
+        .any(|(start, end)| is_point_on_segment(point, start, end))
+}
+
+fn point_strictly_inside_polygon(point: Point, shape: &Shape) -> bool {
+    point_in_polygon(point, shape) && !point_on_shape_boundary(point, shape)
+}
+
+fn bounds_overlap(a: Bounds, b: Bounds, padding: f64) -> bool {
+    !(a.max_x + padding < b.min_x
+        || b.max_x + padding < a.min_x
+        || a.max_y + padding < b.min_y
+        || b.max_y + padding < a.min_y)
+}
+
+fn material_probe_points(contour: &[Point]) -> Vec<Point> {
+    let mut points = Vec::with_capacity(contour.len() * 2 + 1);
+
+    if contour.is_empty() {
+        return points;
+    }
+
+    let centroid = contour.iter().fold(Point { x: 0.0, y: 0.0 }, |acc, point| Point {
+        x: acc.x + point.x,
+        y: acc.y + point.y,
+    });
+    points.push(Point {
+        x: centroid.x / contour.len() as f64,
+        y: centroid.y / contour.len() as f64,
+    });
+    points.extend(contour.iter().copied());
+
+    for (start, end) in contour_segments(contour) {
+        points.push(Point {
+            x: (start.x + end.x) / 2.0,
+            y: (start.y + end.y) / 2.0,
+        });
+    }
+
+    points
+}
+
+fn has_strict_containment(source: &Shape, target: &Shape) -> bool {
+    source.contours.iter().any(|contour| {
+        material_probe_points(contour).into_iter().any(|point| {
+            point_in_polygon(point, source) && point_strictly_inside_polygon(point, target)
+        })
     })
 }
 
-fn transformed_bounds(part: &NestPart, rotation: f64, translation: (f32, f32)) -> (f64, f64) {
-    let radians = rotation;
-    let cos = radians.cos();
-    let sin = radians.sin();
-    let tx = f64::from(translation.0);
-    let ty = f64::from(translation.1);
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
+fn polygons_overlap(a: &Shape, b: &Shape, gap: f64) -> bool {
+    if !bounds_overlap(a.bounds, b.bounds, gap) {
+        return false;
+    }
 
-    if let Some(exterior) = part.shape.contours.first() {
-        for point in exterior {
-            let x = point.x - part.shape.bounds.min_x;
-            let y = point.y - part.shape.bounds.min_y;
-            let transformed_x = x * cos - y * sin + tx;
-            let transformed_y = x * sin + y * cos + ty;
+    for contour_a in &a.contours {
+        let segments_a = contour_segments(contour_a);
 
-            min_x = min_x.min(transformed_x);
-            min_y = min_y.min(transformed_y);
+        for contour_b in &b.contours {
+            let segments_b = contour_segments(contour_b);
+
+            for (a_start, a_end) in &segments_a {
+                for (b_start, b_end) in &segments_b {
+                    if segments_cross_strict(*a_start, *a_end, *b_start, *b_end) {
+                        return true;
+                    }
+
+                    if gap > EPSILON
+                        && segment_distance(*a_start, *a_end, *b_start, *b_end) < gap - EPSILON
+                    {
+                        return true;
+                    }
+                }
+            }
         }
     }
 
-    (min_x.max(0.0), min_y.max(0.0))
+    has_strict_containment(a, b) || has_strict_containment(b, a)
+}
+
+fn simple_region_from_contour(contour: &[Point]) -> Shape {
+    let mut normalized = contour.to_vec();
+
+    if contour_area(&normalized) < 0.0 {
+        normalized.reverse();
+    }
+
+    create_shape(vec![normalized])
+}
+
+fn boundary_distance(point: Point, shape: &Shape) -> f64 {
+    shape
+        .contours
+        .iter()
+        .flat_map(|contour| contour_segments(contour))
+        .map(|(start, end)| point_to_segment_distance(point, start, end))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn shape_inside_bin(shape: &Shape, bin: &Shape, gap: f64) -> bool {
+    if shape.contours.is_empty() || bin.contours.is_empty() {
+        return false;
+    }
+
+    if shape.bounds.min_x < bin.bounds.min_x - EPSILON
+        || shape.bounds.max_x > bin.bounds.max_x + EPSILON
+        || shape.bounds.min_y < bin.bounds.min_y - EPSILON
+        || shape.bounds.max_y > bin.bounds.max_y + EPSILON
+    {
+        return false;
+    }
+
+    for contour in &shape.contours {
+        for point in contour {
+            if !point_in_polygon(*point, bin) {
+                return false;
+            }
+
+            if gap > EPSILON && boundary_distance(*point, bin) < gap - EPSILON {
+                return false;
+            }
+        }
+    }
+
+    for contour in &shape.contours {
+        for (shape_start, shape_end) in contour_segments(contour) {
+            for bin_contour in &bin.contours {
+                for (bin_start, bin_end) in contour_segments(bin_contour) {
+                    if segments_cross_strict(shape_start, shape_end, bin_start, bin_end) {
+                        return false;
+                    }
+
+                    if gap > EPSILON
+                        && segment_distance(shape_start, shape_end, bin_start, bin_end)
+                            < gap - EPSILON
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    for hole in bin.contours.iter().skip(1) {
+        let hole_region = simple_region_from_contour(hole);
+        if polygons_overlap(shape, &hole_region, gap) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn collect_vertices(shape: &Shape) -> Vec<Point> {
+    shape.contours.iter().flatten().copied().collect()
+}
+
+fn push_candidate(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, x: f64, y: f64) {
+    if !x.is_finite() || !y.is_finite() {
+        return;
+    }
+
+    let key = ((x * DEDUPE_SCALE).round() as i64, (y * DEDUPE_SCALE).round() as i64);
+    if seen.insert(key) {
+        points.push(Point { x, y });
+    }
+}
+
+fn add_vertex_alignment_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, stationary: &Shape, moving: &Shape) {
+    let stationary_vertices = collect_vertices(stationary);
+    let moving_vertices = collect_vertices(moving);
+
+    for stationary_vertex in &stationary_vertices {
+        for moving_vertex in &moving_vertices {
+            push_candidate(points, seen, stationary_vertex.x - moving_vertex.x, stationary_vertex.y - moving_vertex.y);
+        }
+    }
+}
+
+fn add_hole_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, placed_shape: &Shape, moving: &Shape) {
+    let moving_vertices = collect_vertices(moving);
+
+    for hole in placed_shape.contours.iter().skip(1) {
+        if hole.len() < 3 {
+            continue;
+        }
+
+        let hole_shape = simple_region_from_contour(hole);
+        push_candidate(
+            points,
+            seen,
+            hole_shape.bounds.min_x - moving.bounds.min_x,
+            hole_shape.bounds.min_y - moving.bounds.min_y,
+        );
+        push_candidate(
+            points,
+            seen,
+            hole_shape.bounds.max_x - moving.bounds.max_x,
+            hole_shape.bounds.min_y - moving.bounds.min_y,
+        );
+        push_candidate(
+            points,
+            seen,
+            hole_shape.bounds.min_x - moving.bounds.min_x,
+            hole_shape.bounds.max_y - moving.bounds.max_y,
+        );
+
+        for hole_vertex in collect_vertices(&hole_shape) {
+            for moving_vertex in &moving_vertices {
+                push_candidate(points, seen, hole_vertex.x - moving_vertex.x, hole_vertex.y - moving_vertex.y);
+            }
+        }
+    }
+}
+
+fn candidate_points(bin: &Shape, moving: &Shape, placed_parts: &[PlacedPart], gap: f64) -> Vec<Point> {
+    let mut points = Vec::new();
+    let mut seen = HashSet::new();
+
+    push_candidate(&mut points, &mut seen, bin.bounds.min_x, bin.bounds.min_y);
+    push_candidate(
+        &mut points,
+        &mut seen,
+        bin.bounds.max_x - moving.bounds.width,
+        bin.bounds.min_y,
+    );
+    push_candidate(
+        &mut points,
+        &mut seen,
+        bin.bounds.min_x,
+        bin.bounds.max_y - moving.bounds.height,
+    );
+    add_vertex_alignment_candidates(&mut points, &mut seen, bin, moving);
+
+    for placed in placed_parts {
+        push_candidate(&mut points, &mut seen, placed.shape.bounds.max_x + gap, placed.shape.bounds.min_y);
+        push_candidate(&mut points, &mut seen, placed.shape.bounds.min_x, placed.shape.bounds.max_y + gap);
+        add_vertex_alignment_candidates(&mut points, &mut seen, &placed.shape, moving);
+        add_hole_candidates(&mut points, &mut seen, &placed.shape, moving);
+    }
+
+    points.sort_by(|a, b| a.y.total_cmp(&b.y).then_with(|| a.x.total_cmp(&b.x)));
+    points
+}
+
+fn rotations(options: &NestOptions) -> Vec<f64> {
+    let source = if options.rotations.is_empty() {
+        vec![0.0]
+    } else {
+        options.rotations.clone()
+    };
+    let mut normalized = source
+        .into_iter()
+        .filter(|rotation| rotation.is_finite())
+        .map(|rotation| {
+            let value = rotation % 360.0;
+            if value < 0.0 { value + 360.0 } else { value }
+        })
+        .collect::<Vec<_>>();
+
+    normalized.sort_by(|a, b| a.total_cmp(b));
+    normalized.dedup_by(|a, b| (*a - *b).abs() <= 1e-6);
+
+    if normalized.is_empty() {
+        normalized.push(0.0);
+    }
+
+    normalized
+}
+
+fn better_score(a: CandidateScore, b: CandidateScore) -> Ordering {
+    a.max_y
+        .total_cmp(&b.max_y)
+        .then_with(|| a.max_x.total_cmp(&b.max_x))
+        .then_with(|| a.y.total_cmp(&b.y))
+        .then_with(|| a.x.total_cmp(&b.x))
+}
+
+fn place_parts_greedy(input: &NestInput) -> NestOutput {
+    let bin = target_shape(&input.target);
+    let rotations = rotations(&input.options);
+    let mut parts = input
+        .parts
+        .iter()
+        .map(|part| (part, normalize_source_shape(&part.shape)))
+        .collect::<Vec<_>>();
+
+    parts.sort_by(|(part_a, shape_a), (part_b, shape_b)| {
+        shape_b
+            .area
+            .total_cmp(&shape_a.area)
+            .then_with(|| part_a.id.cmp(&part_b.id))
+    });
+
+    let mut placements = Vec::new();
+    let mut not_placed_ids = Vec::new();
+    let mut placed_parts = Vec::new();
+
+    for (part, source_shape) in parts {
+        let mut best_candidate: Option<Candidate> = None;
+        let mut best_rotation = 0.0;
+
+        for rotation in &rotations {
+            let moving = normalize_shape_for_rotation(&source_shape, *rotation);
+            let placed_shapes = placed_parts
+                .iter()
+                .map(|placed: &PlacedPart| placed.shape.clone())
+                .collect::<Vec<_>>();
+
+            for point in candidate_points(&bin, &moving, &placed_parts, input.options.gap) {
+                let candidate_shape = translate_shape(&moving, point.x, point.y);
+
+                if !shape_inside_bin(&candidate_shape, &bin, input.options.gap) {
+                    continue;
+                }
+
+                if placed_shapes
+                    .iter()
+                    .any(|placed_shape| polygons_overlap(&candidate_shape, placed_shape, input.options.gap))
+                {
+                    continue;
+                }
+
+                let score = CandidateScore {
+                    max_y: placed_parts
+                        .iter()
+                        .map(|placed| placed.shape.bounds.max_y)
+                        .fold(candidate_shape.bounds.max_y, f64::max),
+                    max_x: placed_parts
+                        .iter()
+                        .map(|placed| placed.shape.bounds.max_x)
+                        .fold(candidate_shape.bounds.max_x, f64::max),
+                    y: point.y,
+                    x: point.x,
+                };
+
+                let candidate = Candidate {
+                    x: point.x,
+                    y: point.y,
+                    shape: candidate_shape,
+                    score,
+                };
+
+                if best_candidate
+                    .as_ref()
+                    .map_or(true, |best| better_score(candidate.score, best.score).is_lt())
+                {
+                    best_candidate = Some(candidate);
+                    best_rotation = *rotation;
+                }
+            }
+        }
+
+        let Some(candidate) = best_candidate else {
+            not_placed_ids.push(part.id.clone());
+            continue;
+        };
+
+        placements.push(NestPlacement {
+            id: part.id.clone(),
+            x: candidate.x,
+            y: candidate.y,
+            rotation: best_rotation,
+        });
+        placed_parts.push(PlacedPart {
+            id: part.id.clone(),
+            x: candidate.x,
+            y: candidate.y,
+            rotation: best_rotation,
+            shape: candidate.shape,
+        });
+    }
+
+    NestOutput {
+        placements,
+        not_placed_ids,
+    }
 }
 
 fn pack(input: NestInput) -> Result<NestOutput, String> {
@@ -194,85 +736,11 @@ fn pack(input: NestInput) -> Result<NestOutput, String> {
         return Err("Target has no contours.".to_string());
     }
 
-    if input.parts.is_empty() {
-        return Ok(NestOutput {
-            placements: Vec::new(),
-            not_placed_ids: Vec::new(),
-        });
-    }
-
-    if input.target.bounds.height <= 0.0 || input.target.bounds.width <= 0.0 {
+    if input.target.bounds.width <= 0.0 || input.target.bounds.height <= 0.0 {
         return Err("Target bounds must have positive width and height.".to_string());
     }
 
-    let mut config = DEFAULT_SPARROW_CONFIG;
-    config.expl_cfg.time_limit = Duration::from_millis(150);
-    config.cmpr_cfg.time_limit = Duration::from_millis(50);
-    config.expl_cfg.separator_config.n_workers = 1;
-    config.cmpr_cfg.separator_config.n_workers = 1;
-    config.min_item_separation = if input.options.gap > 0.0 {
-        Some(input.options.gap as f32)
-    } else {
-        None
-    };
-
-    let ext_instance = build_instance(&input)?;
-    let importer = Importer::new(
-        config.cde_config,
-        config.poly_simpl_tolerance,
-        config.min_item_separation,
-        config.narrow_concavity_cutoff_ratio,
-    );
-    let instance = jagua_rs::probs::spp::io::import(&importer, &ext_instance)
-        .map_err(|error| format!("sparrow import failed: {error}"))?;
-    let rng = Xoshiro256PlusPlus::seed_from_u64(input.options.seed.unwrap_or(1));
-    let mut listener = DummySolListener;
-    let mut terminator = WasmTerminator::new();
-    let epoch = jagua_rs::Instant::now();
-    let solution = optimize(
-        instance.clone(),
-        rng,
-        &mut listener,
-        &mut terminator,
-        &config.expl_cfg,
-        &config.cmpr_cfg,
-    );
-    let exported = jagua_rs::probs::spp::io::export(&instance, &solution, epoch);
-    let mut placed_ids = HashSet::new();
-    let mut placements = Vec::new();
-
-    for placed_item in exported.layout.placed_items {
-        let part_index = placed_item.item_id as usize;
-        let Some(part) = input.parts.get(part_index) else {
-            continue;
-        };
-        let rotation_rad = f64::from(placed_item.transformation.rotation);
-        let (x, y) = transformed_bounds(
-            part,
-            rotation_rad,
-            placed_item.transformation.translation,
-        );
-
-        placed_ids.insert(part.id.clone());
-        placements.push(NestPlacement {
-            id: part.id.clone(),
-            x,
-            y,
-            rotation: rotation_rad.to_degrees(),
-        });
-    }
-
-    let not_placed_ids = input
-        .parts
-        .iter()
-        .filter(|part| !placed_ids.contains(&part.id))
-        .map(|part| part.id.clone())
-        .collect();
-
-    Ok(NestOutput {
-        placements,
-        not_placed_ids,
-    })
+    Ok(place_parts_greedy(&input))
 }
 
 #[wasm_bindgen]

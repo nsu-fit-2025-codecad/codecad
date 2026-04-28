@@ -3,14 +3,6 @@ import type {
   NormalizedPackingOptions,
   PreparedNestInput,
 } from '@/lib/nesting/orchestration/runtime-types';
-import { placePartsGreedy } from '@/lib/nesting/placement/place';
-import {
-  isShapeInsideBin,
-  overlapsPlacedShapes,
-} from '@/lib/nesting/placement/place-validation';
-import { translateShape } from '@/lib/nesting/polygon/polygon-math';
-import { normalizeShapeForRotation } from '@/lib/nesting/polygon/rotations';
-import type { NestResult, PolygonShape } from '@/lib/nesting/polygon/types';
 import type { AsyncNestingSolverAdapter } from '@/lib/nesting/solver/solver-types';
 import {
   mapRustWasmOutputToNestResult,
@@ -24,70 +16,6 @@ interface RustWasmModule {
 }
 
 let rustWasmModulePromise: Promise<RustWasmModule> | null = null;
-
-const hasPolygonHoles = (shape: PolygonShape) => shape.contours.length > 1;
-
-const createConfig = (options: NormalizedPackingOptions) => ({
-  gap: options.gap,
-  rotations: options.rotations,
-  curveTolerance: options.curveTolerance,
-  searchStep: options.searchStep,
-});
-
-const validateRustWasmResult = (
-  prepared: PreparedNestInput,
-  options: NormalizedPackingOptions,
-  result: NestResult
-) => {
-  if (hasPolygonHoles(prepared.nestingShape)) {
-    return 'target holes are not supported by the Rust/WASM strip-packing prototype';
-  }
-
-  if (prepared.parts.some((part) => hasPolygonHoles(part.shape))) {
-    return 'part holes are not supported by the Rust/WASM strip-packing prototype';
-  }
-
-  const partById = new Map(prepared.parts.map((part) => [part.id, part]));
-  const seenIds = new Set<string>();
-  const placedShapes: PolygonShape[] = [];
-
-  for (const placement of result.placements) {
-    const part = partById.get(placement.id);
-
-    if (
-      !part ||
-      seenIds.has(placement.id) ||
-      !Number.isFinite(placement.x) ||
-      !Number.isFinite(placement.y) ||
-      !Number.isFinite(placement.rotation)
-    ) {
-      return 'Rust/WASM returned an invalid placement';
-    }
-
-    const normalizedShape = normalizeShapeForRotation(
-      part.shape,
-      placement.rotation
-    );
-    const placedShape = translateShape(
-      normalizedShape,
-      placement.x,
-      placement.y
-    );
-
-    if (!isShapeInsideBin(placedShape, prepared.nestingShape, options.gap)) {
-      return 'Rust/WASM placement leaves the target boundary';
-    }
-
-    if (overlapsPlacedShapes(placedShape, placedShapes, options.gap)) {
-      return 'Rust/WASM placements overlap';
-    }
-
-    seenIds.add(placement.id);
-    placedShapes.push(placedShape);
-  }
-
-  return null;
-};
 
 const loadRustWasmModule = async (): Promise<RustWasmModule> => {
   if (rustWasmModulePromise) {
@@ -160,33 +88,6 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
     });
 
     const placementResult = mapRustWasmOutputToNestResult(prepared, output);
-    const fallbackReason = validateRustWasmResult(
-      prepared,
-      options,
-      placementResult
-    );
-
-    if (fallbackReason) {
-      callbacks.onProgress?.({
-        phase: 'placing',
-        progress: 0.65,
-        message: `Falling back to TypeScript placement: ${fallbackReason}`,
-      });
-
-      return {
-        algorithm: 'deterministic',
-        placementResult: placePartsGreedy(
-          prepared.parts,
-          prepared.nestingShape,
-          createConfig(options)
-        ),
-        statsExtras: {
-          engine: 'rust-wasm',
-          wasmFallback: true,
-          wasmFallbackReason: fallbackReason,
-        },
-      };
-    }
 
     return {
       algorithm: 'deterministic',
