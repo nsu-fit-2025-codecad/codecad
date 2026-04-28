@@ -633,26 +633,18 @@ fn add_hole_candidates(
 fn candidate_points(bin: &Shape, moving: &Shape, placed_parts: &[PlacedPart], gap: f64) -> Vec<Point> {
     let mut points = Vec::new();
     let mut seen = HashSet::new();
+    let min_x = bin.bounds.min_x + gap;
+    let min_y = bin.bounds.min_y + gap;
+    let max_x = bin.bounds.max_x - moving.bounds.width - gap;
+    let max_y = bin.bounds.max_y - moving.bounds.height - gap;
 
-    push_candidate(&mut points, &mut seen, bin.bounds.min_x, bin.bounds.min_y);
-    push_candidate(
-        &mut points,
-        &mut seen,
-        bin.bounds.max_x - moving.bounds.width,
-        bin.bounds.min_y,
-    );
-    push_candidate(
-        &mut points,
-        &mut seen,
-        bin.bounds.min_x,
-        bin.bounds.max_y - moving.bounds.height,
-    );
-    push_candidate(
-        &mut points,
-        &mut seen,
-        bin.bounds.max_x - moving.bounds.width,
-        bin.bounds.max_y - moving.bounds.height,
-    );
+    if max_x >= min_x - EPSILON && max_y >= min_y - EPSILON {
+        push_candidate(&mut points, &mut seen, min_x, min_y);
+        push_candidate(&mut points, &mut seen, max_x, min_y);
+        push_candidate(&mut points, &mut seen, min_x, max_y);
+        push_candidate(&mut points, &mut seen, max_x, max_y);
+    }
+
     add_vertex_alignment_candidates(&mut points, &mut seen, bin, moving);
 
     for placed in placed_parts {
