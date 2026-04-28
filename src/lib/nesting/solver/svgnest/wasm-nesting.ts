@@ -336,9 +336,9 @@ export default class WasmNesting {
         __wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0: (): usize =>
           this.#addGlobalObject(globalThis),
         __wbg_static_accessor_SELF_37c5d418e4bf5819: (): usize =>
-          this.#addGlobalObject(self),
+          this.#addGlobalObject(globalThis),
         __wbg_static_accessor_WINDOW_5de37043a91a9c40: (): usize =>
-          this.#addGlobalObject(window),
+          this.#addGlobalObject(globalThis),
         __wbg_subarray_aa9065fa9dc5df96: (
           arg0: usize,
           arg1: usize,
