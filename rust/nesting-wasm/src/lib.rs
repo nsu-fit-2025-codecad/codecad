@@ -5,6 +5,9 @@ use wasm_bindgen::prelude::*;
 
 const EPSILON: f64 = 1e-9;
 const DEDUPE_SCALE: f64 = 100_000.0;
+const MAX_PAIRWISE_SHAPE_POINTS: usize = 24;
+const MAX_CANDIDATES_PER_ROTATION: usize = 800;
+const PRIORITY_CANDIDATES_PER_ROTATION: usize = 400;
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 struct Point {
@@ -92,8 +95,9 @@ struct Candidate {
 
 #[derive(Clone, Copy)]
 struct CandidateScore {
-    max_y: f64,
-    max_x: f64,
+    area: f64,
+    width: f64,
+    height: f64,
     y: f64,
     x: f64,
 }
@@ -509,6 +513,15 @@ fn collect_vertices(shape: &Shape) -> Vec<Point> {
     shape.contours.iter().flatten().copied().collect()
 }
 
+fn sample_points(points: &[Point], max_points: usize) -> Vec<Point> {
+    if points.len() <= max_points {
+        return points.to_vec();
+    }
+
+    let step = points.len().div_ceil(max_points);
+    points.iter().step_by(step).copied().collect()
+}
+
 fn push_candidate(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, x: f64, y: f64) {
     if !x.is_finite() || !y.is_finite() {
         return;
@@ -520,9 +533,14 @@ fn push_candidate(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, x: f6
     }
 }
 
-fn add_vertex_alignment_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, stationary: &Shape, moving: &Shape) {
-    let stationary_vertices = collect_vertices(stationary);
-    let moving_vertices = collect_vertices(moving);
+fn add_vertex_alignment_candidates(
+    points: &mut Vec<Point>,
+    seen: &mut HashSet<(i64, i64)>,
+    stationary: &Shape,
+    moving: &Shape,
+) {
+    let stationary_vertices = sample_points(&collect_vertices(stationary), MAX_PAIRWISE_SHAPE_POINTS);
+    let moving_vertices = sample_points(&collect_vertices(moving), MAX_PAIRWISE_SHAPE_POINTS);
 
     for stationary_vertex in &stationary_vertices {
         for moving_vertex in &moving_vertices {
@@ -531,8 +549,45 @@ fn add_vertex_alignment_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(
     }
 }
 
-fn add_hole_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, placed_shape: &Shape, moving: &Shape) {
-    let moving_vertices = collect_vertices(moving);
+fn add_hole_interior_anchors(
+    points: &mut Vec<Point>,
+    seen: &mut HashSet<(i64, i64)>,
+    hole_shape: &Shape,
+    moving: &Shape,
+    gap: f64,
+) {
+    let min_x = hole_shape.bounds.min_x - moving.bounds.min_x + gap;
+    let max_x = hole_shape.bounds.max_x - moving.bounds.max_x - gap;
+    let min_y = hole_shape.bounds.min_y - moving.bounds.min_y + gap;
+    let max_y = hole_shape.bounds.max_y - moving.bounds.max_y - gap;
+
+    if max_x < min_x - EPSILON || max_y < min_y - EPSILON {
+        return;
+    }
+
+    let center_x = (min_x + max_x) / 2.0;
+    let center_y = (min_y + max_y) / 2.0;
+    push_candidate(points, seen, center_x, center_y);
+
+    if max_x - min_x > EPSILON {
+        push_candidate(points, seen, (min_x * 3.0 + max_x) / 4.0, center_y);
+        push_candidate(points, seen, (min_x + max_x * 3.0) / 4.0, center_y);
+    }
+
+    if max_y - min_y > EPSILON {
+        push_candidate(points, seen, center_x, (min_y * 3.0 + max_y) / 4.0);
+        push_candidate(points, seen, center_x, (min_y + max_y * 3.0) / 4.0);
+    }
+}
+
+fn add_hole_candidates(
+    points: &mut Vec<Point>,
+    seen: &mut HashSet<(i64, i64)>,
+    placed_shape: &Shape,
+    moving: &Shape,
+    gap: f64,
+) {
+    let moving_vertices = sample_points(&collect_vertices(moving), MAX_PAIRWISE_SHAPE_POINTS);
 
     for hole in placed_shape.contours.iter().skip(1) {
         if hole.len() < 3 {
@@ -540,6 +595,8 @@ fn add_hole_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, 
         }
 
         let hole_shape = simple_region_from_contour(hole);
+        add_hole_interior_anchors(points, seen, &hole_shape, moving, gap);
+
         push_candidate(
             points,
             seen,
@@ -558,8 +615,14 @@ fn add_hole_candidates(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, 
             hole_shape.bounds.min_x - moving.bounds.min_x,
             hole_shape.bounds.max_y - moving.bounds.max_y,
         );
+        push_candidate(
+            points,
+            seen,
+            hole_shape.bounds.max_x - moving.bounds.max_x,
+            hole_shape.bounds.max_y - moving.bounds.max_y,
+        );
 
-        for hole_vertex in collect_vertices(&hole_shape) {
+        for hole_vertex in sample_points(&collect_vertices(&hole_shape), MAX_PAIRWISE_SHAPE_POINTS) {
             for moving_vertex in &moving_vertices {
                 push_candidate(points, seen, hole_vertex.x - moving_vertex.x, hole_vertex.y - moving_vertex.y);
             }
@@ -584,17 +647,43 @@ fn candidate_points(bin: &Shape, moving: &Shape, placed_parts: &[PlacedPart], ga
         bin.bounds.min_x,
         bin.bounds.max_y - moving.bounds.height,
     );
+    push_candidate(
+        &mut points,
+        &mut seen,
+        bin.bounds.max_x - moving.bounds.width,
+        bin.bounds.max_y - moving.bounds.height,
+    );
     add_vertex_alignment_candidates(&mut points, &mut seen, bin, moving);
 
     for placed in placed_parts {
         push_candidate(&mut points, &mut seen, placed.shape.bounds.max_x + gap, placed.shape.bounds.min_y);
         push_candidate(&mut points, &mut seen, placed.shape.bounds.min_x, placed.shape.bounds.max_y + gap);
         add_vertex_alignment_candidates(&mut points, &mut seen, &placed.shape, moving);
-        add_hole_candidates(&mut points, &mut seen, &placed.shape, moving);
+        add_hole_candidates(&mut points, &mut seen, &placed.shape, moving, gap);
     }
 
     points.sort_by(|a, b| a.y.total_cmp(&b.y).then_with(|| a.x.total_cmp(&b.x)));
-    points
+
+    if points.len() <= MAX_CANDIDATES_PER_ROTATION {
+        return points;
+    }
+
+    let head_count = PRIORITY_CANDIDATES_PER_ROTATION.min(MAX_CANDIDATES_PER_ROTATION);
+    let mut limited = points[..head_count].to_vec();
+    let remaining_budget = MAX_CANDIDATES_PER_ROTATION - limited.len();
+
+    if remaining_budget > 0 {
+        let tail = &points[head_count..];
+        let stride = tail.len() as f64 / remaining_budget as f64;
+
+        for index in 0..remaining_budget {
+            let tail_index = ((index as f64) * stride).floor() as usize;
+            limited.push(tail[tail_index.min(tail.len() - 1)]);
+        }
+    }
+
+    limited.sort_by(|a, b| a.y.total_cmp(&b.y).then_with(|| a.x.total_cmp(&b.x)));
+    limited
 }
 
 fn rotations(options: &NestOptions) -> Vec<f64> {
@@ -623,11 +712,53 @@ fn rotations(options: &NestOptions) -> Vec<f64> {
 }
 
 fn better_score(a: CandidateScore, b: CandidateScore) -> Ordering {
-    a.max_y
-        .total_cmp(&b.max_y)
-        .then_with(|| a.max_x.total_cmp(&b.max_x))
+    a.area
+        .total_cmp(&b.area)
+        .then_with(|| a.height.total_cmp(&b.height))
+        .then_with(|| a.width.total_cmp(&b.width))
         .then_with(|| a.y.total_cmp(&b.y))
         .then_with(|| a.x.total_cmp(&b.x))
+}
+
+fn combined_bounds_with_candidate(candidate: Bounds, placed_parts: &[PlacedPart]) -> Bounds {
+    let mut min_x = candidate.min_x;
+    let mut min_y = candidate.min_y;
+    let mut max_x = candidate.max_x;
+    let mut max_y = candidate.max_y;
+
+    for placed in placed_parts {
+        min_x = min_x.min(placed.shape.bounds.min_x);
+        min_y = min_y.min(placed.shape.bounds.min_y);
+        max_x = max_x.max(placed.shape.bounds.max_x);
+        max_y = max_y.max(placed.shape.bounds.max_y);
+    }
+
+    Bounds {
+        min_x,
+        min_y,
+        max_x,
+        max_y,
+        width: max_x - min_x,
+        height: max_y - min_y,
+    }
+}
+
+fn candidate_bounds(moving: &Shape, point: Point) -> Bounds {
+    Bounds {
+        min_x: moving.bounds.min_x + point.x,
+        min_y: moving.bounds.min_y + point.y,
+        max_x: moving.bounds.max_x + point.x,
+        max_y: moving.bounds.max_y + point.y,
+        width: moving.bounds.width,
+        height: moving.bounds.height,
+    }
+}
+
+fn candidate_bounds_inside(candidate: Bounds, bin: &Shape) -> bool {
+    candidate.min_x >= bin.bounds.min_x - EPSILON
+        && candidate.max_x <= bin.bounds.max_x + EPSILON
+        && candidate.min_y >= bin.bounds.min_y - EPSILON
+        && candidate.max_y <= bin.bounds.max_y + EPSILON
 }
 
 fn place_parts_greedy(input: &NestInput) -> NestOutput {
@@ -662,6 +793,12 @@ fn place_parts_greedy(input: &NestInput) -> NestOutput {
                 .collect::<Vec<_>>();
 
             for point in candidate_points(&bin, &moving, &placed_parts, input.options.gap) {
+                let bounds = candidate_bounds(&moving, point);
+
+                if !candidate_bounds_inside(bounds, &bin) {
+                    continue;
+                }
+
                 let candidate_shape = translate_shape(&moving, point.x, point.y);
 
                 if !shape_inside_bin(&candidate_shape, &bin, input.options.gap) {
@@ -675,15 +812,11 @@ fn place_parts_greedy(input: &NestInput) -> NestOutput {
                     continue;
                 }
 
+                let combined_bounds = combined_bounds_with_candidate(candidate_shape.bounds, &placed_parts);
                 let score = CandidateScore {
-                    max_y: placed_parts
-                        .iter()
-                        .map(|placed| placed.shape.bounds.max_y)
-                        .fold(candidate_shape.bounds.max_y, f64::max),
-                    max_x: placed_parts
-                        .iter()
-                        .map(|placed| placed.shape.bounds.max_x)
-                        .fold(candidate_shape.bounds.max_x, f64::max),
+                    area: combined_bounds.width * combined_bounds.height,
+                    width: combined_bounds.width,
+                    height: combined_bounds.height,
                     y: point.y,
                     x: point.x,
                 };
