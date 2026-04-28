@@ -3,6 +3,14 @@ import type {
   NormalizedPackingOptions,
   PreparedNestInput,
 } from '@/lib/nesting/orchestration/runtime-types';
+import { placePartsGreedy } from '@/lib/nesting/placement/place';
+import {
+  isShapeInsideBin,
+  overlapsPlacedShapes,
+} from '@/lib/nesting/placement/place-validation';
+import { translateShape } from '@/lib/nesting/polygon/polygon-math';
+import { normalizeShapeForRotation } from '@/lib/nesting/polygon/rotations';
+import type { NestResult, PolygonShape } from '@/lib/nesting/polygon/types';
 import type { AsyncNestingSolverAdapter } from '@/lib/nesting/solver/solver-types';
 import {
   mapRustWasmOutputToNestResult,
@@ -16,6 +24,69 @@ interface RustWasmModule {
 }
 
 let rustWasmModulePromise: Promise<RustWasmModule> | null = null;
+
+const hasPolygonHoles = (shape: PolygonShape) => shape.contours.length > 1;
+
+const createConfig = (options: NormalizedPackingOptions) => ({
+  gap: options.gap,
+  rotations: options.rotations,
+  curveTolerance: options.curveTolerance,
+  searchStep: options.searchStep,
+});
+
+const isRustWasmResultUsable = (
+  prepared: PreparedNestInput,
+  options: NormalizedPackingOptions,
+  result: NestResult
+) => {
+  if (
+    hasPolygonHoles(prepared.nestingShape) ||
+    prepared.parts.some((part) => hasPolygonHoles(part.shape))
+  ) {
+    return false;
+  }
+
+  const partById = new Map(prepared.parts.map((part) => [part.id, part]));
+  const seenIds = new Set<string>();
+  const placedShapes: PolygonShape[] = [];
+
+  for (const placement of result.placements) {
+    const part = partById.get(placement.id);
+
+    if (
+      !part ||
+      seenIds.has(placement.id) ||
+      !Number.isFinite(placement.x) ||
+      !Number.isFinite(placement.y) ||
+      !Number.isFinite(placement.rotation)
+    ) {
+      return false;
+    }
+
+    const normalizedShape = normalizeShapeForRotation(
+      part.shape,
+      placement.rotation
+    );
+    const placedShape = translateShape(
+      normalizedShape,
+      placement.x,
+      placement.y
+    );
+
+    if (!isShapeInsideBin(placedShape, prepared.nestingShape, options.gap)) {
+      return false;
+    }
+
+    if (overlapsPlacedShapes(placedShape, placedShapes, options.gap)) {
+      return false;
+    }
+
+    seenIds.add(placement.id);
+    placedShapes.push(placedShape);
+  }
+
+  return true;
+};
 
 const loadRustWasmModule = async (): Promise<RustWasmModule> => {
   if (rustWasmModulePromise) {
@@ -87,9 +158,32 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
       message: 'Rust/WASM nesting finished',
     });
 
+    const placementResult = mapRustWasmOutputToNestResult(prepared, output);
+
+    if (!isRustWasmResultUsable(prepared, options, placementResult)) {
+      callbacks.onProgress?.({
+        phase: 'placing',
+        progress: 0.65,
+        message: 'Falling back to TypeScript placement',
+      });
+
+      return {
+        algorithm: 'deterministic',
+        placementResult: placePartsGreedy(
+          prepared.parts,
+          prepared.nestingShape,
+          createConfig(options)
+        ),
+        statsExtras: {
+          engine: 'rust-wasm',
+          wasmFallback: true,
+        },
+      };
+    }
+
     return {
       algorithm: 'deterministic',
-      placementResult: mapRustWasmOutputToNestResult(prepared, output),
+      placementResult,
       statsExtras: {
         engine: 'rust-wasm',
       },

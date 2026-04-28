@@ -25,8 +25,15 @@ const formatCompactness = (compactness: number) =>
 const formatAlgorithm = (algorithm: NestingRunStats['algorithm']) =>
   algorithm === 'genetic' ? 'Genetic algorithm' : 'Standard placement';
 
-const formatEngine = (engine: NestingRunStats['engine']) =>
-  engine === 'rust-wasm' ? 'Rust/WASM experimental' : 'TypeScript stable';
+const formatEngine = (stats: NestingRunStats) => {
+  if (stats.engine === 'rust-wasm' && stats.wasmFallback) {
+    return 'Rust/WASM fallback to TypeScript';
+  }
+
+  return stats.engine === 'rust-wasm'
+    ? 'Rust/WASM experimental'
+    : 'TypeScript stable';
+};
 
 const isCancellationMessage = (error: string) => /cancel/i.test(error);
 
@@ -93,8 +100,7 @@ export const NestingStatus = ({
         {stats && (
           <div className="space-y-1">
             <p>
-              Engine:{' '}
-              <span className="font-medium">{formatEngine(stats.engine)}</span>
+              Engine: <span className="font-medium">{formatEngine(stats)}</span>
             </p>
             <p>
               Method:{' '}
