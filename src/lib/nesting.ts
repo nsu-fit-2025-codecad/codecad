@@ -62,6 +62,7 @@ export interface NestingRunStats {
   evaluations?: number;
   geneticSeed?: number;
   wasmFallback?: boolean;
+  wasmFallbackReason?: string;
 }
 
 const resolveNestingEngine = (options: PackingOptions): NestingEngine =>

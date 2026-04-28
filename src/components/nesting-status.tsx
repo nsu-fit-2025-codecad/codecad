@@ -126,6 +126,12 @@ export const NestingStatus = ({
                 {formatCompactness(stats.fitness.compactness)}
               </span>
             </p>
+            {stats.wasmFallbackReason && (
+              <p>
+                Fallback reason:{' '}
+                <span className="font-medium">{stats.wasmFallbackReason}</span>
+              </p>
+            )}
             {stats.evaluations !== undefined && (
               <p>
                 Genetic algorithm evaluations:{' '}

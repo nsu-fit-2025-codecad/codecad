@@ -34,16 +34,17 @@ const createConfig = (options: NormalizedPackingOptions) => ({
   searchStep: options.searchStep,
 });
 
-const isRustWasmResultUsable = (
+const validateRustWasmResult = (
   prepared: PreparedNestInput,
   options: NormalizedPackingOptions,
   result: NestResult
 ) => {
-  if (
-    hasPolygonHoles(prepared.nestingShape) ||
-    prepared.parts.some((part) => hasPolygonHoles(part.shape))
-  ) {
-    return false;
+  if (hasPolygonHoles(prepared.nestingShape)) {
+    return 'target holes are not supported by the Rust/WASM strip-packing prototype';
+  }
+
+  if (prepared.parts.some((part) => hasPolygonHoles(part.shape))) {
+    return 'part holes are not supported by the Rust/WASM strip-packing prototype';
   }
 
   const partById = new Map(prepared.parts.map((part) => [part.id, part]));
@@ -60,7 +61,7 @@ const isRustWasmResultUsable = (
       !Number.isFinite(placement.y) ||
       !Number.isFinite(placement.rotation)
     ) {
-      return false;
+      return 'Rust/WASM returned an invalid placement';
     }
 
     const normalizedShape = normalizeShapeForRotation(
@@ -74,18 +75,18 @@ const isRustWasmResultUsable = (
     );
 
     if (!isShapeInsideBin(placedShape, prepared.nestingShape, options.gap)) {
-      return false;
+      return 'Rust/WASM placement leaves the target boundary';
     }
 
     if (overlapsPlacedShapes(placedShape, placedShapes, options.gap)) {
-      return false;
+      return 'Rust/WASM placements overlap';
     }
 
     seenIds.add(placement.id);
     placedShapes.push(placedShape);
   }
 
-  return true;
+  return null;
 };
 
 const loadRustWasmModule = async (): Promise<RustWasmModule> => {
@@ -159,12 +160,17 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
     });
 
     const placementResult = mapRustWasmOutputToNestResult(prepared, output);
+    const fallbackReason = validateRustWasmResult(
+      prepared,
+      options,
+      placementResult
+    );
 
-    if (!isRustWasmResultUsable(prepared, options, placementResult)) {
+    if (fallbackReason) {
       callbacks.onProgress?.({
         phase: 'placing',
         progress: 0.65,
-        message: 'Falling back to TypeScript placement',
+        message: `Falling back to TypeScript placement: ${fallbackReason}`,
       });
 
       return {
@@ -177,6 +183,7 @@ export const rustWasmNestingSolver: AsyncNestingSolverAdapter = {
         statsExtras: {
           engine: 'rust-wasm',
           wasmFallback: true,
+          wasmFallbackReason: fallbackReason,
         },
       };
     }
