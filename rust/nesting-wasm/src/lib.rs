@@ -8,6 +8,8 @@ const DEDUPE_SCALE: f64 = 100_000.0;
 const MAX_PAIRWISE_SHAPE_POINTS: usize = 24;
 const MAX_CANDIDATES_PER_ROTATION: usize = 800;
 const PRIORITY_CANDIDATES_PER_ROTATION: usize = 400;
+const MAX_AXIS_VALUES: usize = 40;
+const MAX_GRID_POINTS: usize = 2_500;
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 struct Point {
@@ -519,7 +521,58 @@ fn sample_points(points: &[Point], max_points: usize) -> Vec<Point> {
     }
 
     let step = points.len().div_ceil(max_points);
-    points.iter().step_by(step).copied().collect()
+    let mut sampled = points.iter().step_by(step).copied().collect::<Vec<_>>();
+    let mut min_x_point = points[0];
+    let mut max_x_point = points[0];
+    let mut min_y_point = points[0];
+    let mut max_y_point = points[0];
+
+    for point in points {
+        if point.x < min_x_point.x {
+            min_x_point = *point;
+        }
+        if point.x > max_x_point.x {
+            max_x_point = *point;
+        }
+        if point.y < min_y_point.y {
+            min_y_point = *point;
+        }
+        if point.y > max_y_point.y {
+            max_y_point = *point;
+        }
+    }
+
+    sampled.extend([min_x_point, max_x_point, min_y_point, max_y_point]);
+    let mut seen = HashSet::new();
+    sampled.retain(|point| {
+        let key = (
+            (point.x * DEDUPE_SCALE).round() as i64,
+            (point.y * DEDUPE_SCALE).round() as i64,
+        );
+        seen.insert(key)
+    });
+    sampled.truncate(max_points);
+    sampled
+}
+
+fn reduced_axis_values(values: &[f64]) -> Vec<f64> {
+    let mut unique = values
+        .iter()
+        .filter(|value| value.is_finite())
+        .map(|value| (value * DEDUPE_SCALE).round() / DEDUPE_SCALE)
+        .collect::<Vec<_>>();
+
+    unique.sort_by(|a, b| a.total_cmp(b));
+    unique.dedup_by(|a, b| (*a - *b).abs() <= 1.0 / DEDUPE_SCALE);
+
+    if unique.len() <= MAX_AXIS_VALUES {
+        return unique;
+    }
+
+    let step = (unique.len() - 1) as f64 / (MAX_AXIS_VALUES - 1) as f64;
+    (0..MAX_AXIS_VALUES)
+        .map(|index| unique[((index as f64) * step).round() as usize])
+        .collect()
 }
 
 fn push_candidate(points: &mut Vec<Point>, seen: &mut HashSet<(i64, i64)>, x: f64, y: f64) {
@@ -538,13 +591,39 @@ fn add_vertex_alignment_candidates(
     seen: &mut HashSet<(i64, i64)>,
     stationary: &Shape,
     moving: &Shape,
+    gap: f64,
 ) {
     let stationary_vertices = sample_points(&collect_vertices(stationary), MAX_PAIRWISE_SHAPE_POINTS);
     let moving_vertices = sample_points(&collect_vertices(moving), MAX_PAIRWISE_SHAPE_POINTS);
+    let mut x_values = Vec::new();
+    let mut y_values = Vec::new();
 
     for stationary_vertex in &stationary_vertices {
         for moving_vertex in &moving_vertices {
-            push_candidate(points, seen, stationary_vertex.x - moving_vertex.x, stationary_vertex.y - moving_vertex.y);
+            let x = stationary_vertex.x - moving_vertex.x;
+            let y = stationary_vertex.y - moving_vertex.y;
+
+            push_candidate(points, seen, x, y);
+            x_values.push(x);
+            y_values.push(y);
+
+            if gap > EPSILON {
+                x_values.push(x - gap);
+                x_values.push(x + gap);
+                y_values.push(y - gap);
+                y_values.push(y + gap);
+            }
+        }
+    }
+
+    let reduced_x = reduced_axis_values(&x_values);
+    let reduced_y = reduced_axis_values(&y_values);
+
+    if reduced_x.len() * reduced_y.len() <= MAX_GRID_POINTS {
+        for x in &reduced_x {
+            for y in &reduced_y {
+                push_candidate(points, seen, *x, *y);
+            }
         }
     }
 }
@@ -645,12 +724,13 @@ fn candidate_points(bin: &Shape, moving: &Shape, placed_parts: &[PlacedPart], ga
         push_candidate(&mut points, &mut seen, max_x, max_y);
     }
 
-    add_vertex_alignment_candidates(&mut points, &mut seen, bin, moving);
+    add_vertex_alignment_candidates(&mut points, &mut seen, bin, moving, gap);
 
     for placed in placed_parts {
         push_candidate(&mut points, &mut seen, placed.shape.bounds.max_x + gap, placed.shape.bounds.min_y);
         push_candidate(&mut points, &mut seen, placed.shape.bounds.min_x, placed.shape.bounds.max_y + gap);
-        add_vertex_alignment_candidates(&mut points, &mut seen, &placed.shape, moving);
+        push_candidate(&mut points, &mut seen, placed.shape.bounds.max_x + gap, placed.shape.bounds.max_y + gap);
+        add_vertex_alignment_candidates(&mut points, &mut seen, &placed.shape, moving, gap);
         add_hole_candidates(&mut points, &mut seen, &placed.shape, moving, gap);
     }
 
