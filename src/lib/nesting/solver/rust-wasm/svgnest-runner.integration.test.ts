@@ -10,12 +10,15 @@ import type {
   PreparedNestInput,
 } from '@/lib/nesting/orchestration/runtime-types';
 import type { NestPart, PolygonShape } from '@/lib/nesting/polygon/types';
-import { runSvgNest } from '@/lib/nesting/solver/rust-wasm/svgnest-runner';
+import {
+  buildSvgNestPolygons,
+  runSvgNest,
+  runSvgNestRaw,
+} from '@/lib/nesting/solver/rust-wasm/svgnest-runner';
 
 const wasmPath = resolve('public/nesting/polygon-packer.wasm');
-const shouldRun =
-  existsSync(wasmPath) || process.env.SVGNEST_WASM_REQUIRED === 'true';
-const describeIfWasm = shouldRun ? describe : describe.skip;
+const shouldRunWasm = process.env.SVGNEST_WASM_REQUIRED === 'true';
+const describeIfWasm = shouldRunWasm ? describe : describe.skip;
 
 const rectangleShape = (width: number, height: number): PolygonShape => ({
   contours: [
@@ -100,6 +103,8 @@ const options: NormalizedPackingOptions = {
   mutationRate: 0.1,
   crossoverRate: 0.85,
   eliteCount: 1,
+  wasmSearchMode: 'single',
+  wasmAttempts: 1,
 };
 
 const wasmBytes = () => {
@@ -114,6 +119,44 @@ const wasmBytes = () => {
     bytes.byteOffset + bytes.byteLength
   );
 };
+
+describe('SVGnest WASM input conversion', () => {
+  it('passes part holes as staged child contours and keeps target holes as bin holes', () => {
+    const prepared = preparedInput(shapeWithHole(120, 100, 10, 10, 20, 20), [
+      part('frame', shapeWithHole(80, 60, 20, 15, 40, 30)),
+      part('insert', rectangleShape(30, 20)),
+    ]);
+
+    const input = buildSvgNestPolygons(prepared, options);
+
+    expect(input.binHoleCount).toBe(1);
+    expect(input.polygons).toHaveLength(5);
+    expect(input.sourceMap).toEqual([
+      { partIndex: 0, isRoot: true },
+      { partIndex: 1, isRoot: true },
+      { partIndex: 0, isRoot: false },
+    ]);
+
+    const frameOuterX = input.polygons[0][0];
+    const insertX = input.polygons[1][0];
+    const frameHoleX = input.polygons[2][0];
+
+    expect(frameHoleX).toBeGreaterThan(frameOuterX);
+    expect(insertX).toBeGreaterThan(frameOuterX + 100);
+  });
+});
+
+describe('SVGnest vendor patches', () => {
+  it('keeps the part-in-part child NFP size check patched', () => {
+    const pairFlow = readFileSync(
+      resolve('vendor/svgnest/polygon-packer-algo/src/nesting/pair_flow.rs'),
+      'utf8'
+    );
+
+    expect(pairFlow).toContain('let size_b = polygon_b.size();');
+    expect(pairFlow).not.toContain('let size_b = child.size();');
+  });
+});
 
 describeIfWasm('SVGnest WASM runner', () => {
   it('places a rectangle in a rectangle target', async () => {
@@ -186,6 +229,34 @@ describeIfWasm('SVGnest WASM runner', () => {
       'insert',
     ]);
     expect(result.notPlacedIds).toEqual([]);
+
+    const frame = result.placements.find(
+      (placement) => placement.id === 'frame'
+    );
+    const insert = result.placements.find(
+      (placement) => placement.id === 'insert'
+    );
+
+    expect(insert!.x).toBeGreaterThanOrEqual(frame!.x + 20);
+    expect(insert!.x + 30).toBeLessThanOrEqual(frame!.x + 60);
+    expect(insert!.y).toBeGreaterThanOrEqual(frame!.y + 15);
+    expect(insert!.y + 20).toBeLessThanOrEqual(frame!.y + 45);
+  });
+
+  it('can place a smaller part inside a placed part hole before TS postprocess', async () => {
+    const result = await runSvgNestRaw(
+      preparedInput(rectangleShape(130, 70), [
+        part('frame', shapeWithHole(80, 60, 20, 15, 40, 30)),
+        part('insert', rectangleShape(30, 20)),
+      ]),
+      options,
+      wasmBytes()
+    );
+
+    expect(result.placements.map((placement) => placement.id).sort()).toEqual([
+      'frame',
+      'insert',
+    ]);
 
     const frame = result.placements.find(
       (placement) => placement.id === 'frame'

@@ -37,6 +37,7 @@ const PAIR_CHUNK_SIZE = 1;
 
 interface SourceMapEntry {
   partIndex: number;
+  isRoot: boolean;
 }
 
 const toPolygon = (
@@ -143,22 +144,50 @@ const buildSvgNestConfig = (options: NormalizedPackingOptions): NestConfig => ({
   useHoles: true,
 });
 
-const buildPolygons = (
+export const buildSvgNestPolygons = (
   prepared: PreparedNestInput,
   options: NormalizedPackingOptions
 ) => {
   const polygons: Float32Array[] = [];
   const sourceMap: SourceMapEntry[] = [];
   const stagingStep = getStagingStep(prepared, options);
+  const stagedPartHoles: Array<{
+    contour: Contour;
+    partIndex: number;
+    stageX: number;
+  }> = [];
 
+  // SVGnest uses root source ids as indexes into its root node array, so keep
+  // all placeable roots densely ordered before appending child hole contours.
   prepared.parts.forEach((part, partIndex) => {
     const stageX = partIndex * stagingStep;
-    const outerContour = part.shape.contours[0];
+    const [outerContour, ...holeContours] = part.shape.contours;
 
-    if (outerContour) {
-      sourceMap.push({ partIndex });
-      polygons.push(toPolygon(outerContour, stageX, 0));
+    if (!outerContour) {
+      return;
     }
+
+    sourceMap.push({
+      partIndex,
+      isRoot: true,
+    });
+    polygons.push(toPolygon(outerContour, stageX, 0));
+
+    holeContours.forEach((contour) => {
+      stagedPartHoles.push({
+        contour,
+        partIndex,
+        stageX,
+      });
+    });
+  });
+
+  stagedPartHoles.forEach(({ contour, partIndex, stageX }) => {
+    sourceMap.push({
+      partIndex,
+      isRoot: false,
+    });
+    polygons.push(toPolygon(contour, stageX, 0));
   });
 
   const [targetOuter, ...targetHoles] = prepared.nestingShape.contours;
@@ -194,18 +223,26 @@ const decodeFirstBinPlacement = (
       const sourceIndex = result.bindData(index);
       const mapped = sourceMap[sourceIndex];
 
-      if (!mapped || placedPartIndexes.has(mapped.partIndex)) {
+      if (
+        !mapped ||
+        !mapped.isRoot ||
+        placedPartIndexes.has(mapped.partIndex)
+      ) {
         continue;
       }
 
       const part = prepared.parts[mapped.partIndex];
+      const normalizedShape = normalizeShapeForRotation(
+        part.shape,
+        result.rotation
+      );
       placedPartIndexes.add(mapped.partIndex);
       placements.push({
         id: part.id,
         x: result.x,
         y: result.y,
         rotation: result.rotation,
-        shape: part.shape,
+        shape: translateShape(normalizedShape, result.x, result.y),
       });
     }
   }
@@ -338,6 +375,7 @@ const fillPlacedHoles = (
 
             movingPlacement.x = point.x;
             movingPlacement.y = point.y;
+            movingPlacement.shape = candidateShape;
             movingPart.x = point.x;
             movingPart.y = point.y;
             movingPart.shape = candidateShape;
@@ -439,7 +477,7 @@ const fillPlacedHoles = (
           x: point.x,
           y: point.y,
           rotation,
-          shape: part.shape,
+          shape: candidateShape,
         });
         placedParts.push({
           id: part.id,
@@ -502,7 +540,10 @@ const validatePlacements = (
       return;
     }
 
-    placements.push(placement);
+    placements.push({
+      ...placement,
+      shape: candidateShape,
+    });
     placedShapes.push(candidateShape);
   });
 
@@ -518,7 +559,7 @@ const validatePlacements = (
   };
 };
 
-export const runSvgNest = async (
+export const runSvgNestRaw = async (
   prepared: PreparedNestInput,
   options: NormalizedPackingOptions,
   wasmBytes: ArrayBuffer
@@ -526,7 +567,7 @@ export const runSvgNest = async (
   const wasmNesting = new WasmNesting();
   await wasmNesting.initBuffer(wasmBytes);
 
-  const { binHoleCount, polygons, sourceMap } = buildPolygons(
+  const { binHoleCount, polygons, sourceMap } = buildSvgNestPolygons(
     prepared,
     options
   );
@@ -566,22 +607,27 @@ export const runSvgNest = async (
       };
     }
 
-    return fillPlacedHoles(
+    return validatePlacements(
       prepared,
       options,
-      validatePlacements(
+      decodeFirstBinPlacement(
         prepared,
-        options,
-        decodeFirstBinPlacement(
-          prepared,
-          wasmNesting.getPlacementResult([
-            placementResult.buffer as ArrayBuffer,
-          ]),
-          sourceMap
-        )
+        wasmNesting.getPlacementResult([placementResult.buffer as ArrayBuffer]),
+        sourceMap
       )
     );
   } finally {
     wasmNesting.stop();
   }
 };
+
+export const runSvgNest = async (
+  prepared: PreparedNestInput,
+  options: NormalizedPackingOptions,
+  wasmBytes: ArrayBuffer
+): Promise<NestResult> =>
+  fillPlacedHoles(
+    prepared,
+    options,
+    await runSvgNestRaw(prepared, options, wasmBytes)
+  );

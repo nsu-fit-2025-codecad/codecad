@@ -19,8 +19,8 @@ const formatDuration = (durationMs: number) =>
     ? `${(durationMs / 1000).toFixed(2)}s`
     : `${Math.round(durationMs)}ms`;
 
-const formatCompactness = (compactness: number) =>
-  Number.isFinite(compactness) ? compactness.toFixed(2) : 'n/a';
+const formatMetric = (value: number, digits = 2) =>
+  Number.isFinite(value) ? value.toFixed(digits) : 'n/a';
 
 const formatAlgorithm = (algorithm: NestingRunStats['algorithm']) =>
   algorithm === 'genetic' ? 'Genetic algorithm' : 'Standard placement';
@@ -121,11 +121,28 @@ export const NestingStatus = ({
               </span>
             </p>
             <p>
-              Layout footprint:{' '}
+              Used area:{' '}
               <span className="font-medium">
-                {formatCompactness(stats.fitness.compactness)}
+                {formatMetric(stats.fitness.usedArea)}
               </span>
             </p>
+            <p>
+              Utilization:{' '}
+              <span className="font-medium">
+                {formatMetric(stats.fitness.utilization * 100, 1)}%
+              </span>
+            </p>
+            {stats.engine === 'rust-wasm' &&
+              stats.wasmSearchMode === 'best-of-n' &&
+              stats.wasmAttempts !== undefined &&
+              stats.wasmBestAttempt !== undefined && (
+                <p>
+                  Attempts:{' '}
+                  <span className="font-medium">
+                    {stats.wasmBestAttempt} / {stats.wasmAttempts}
+                  </span>
+                </p>
+              )}
             {stats.wasmFallbackReason && (
               <p>
                 Fallback reason:{' '}

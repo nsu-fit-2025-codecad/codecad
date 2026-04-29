@@ -27,10 +27,13 @@ export interface PackingOptions {
   eliteCount?: number;
   geneticSeed?: number;
   nestingEngine?: NestingEngine;
+  wasmSearchMode?: WasmSearchMode;
+  wasmAttempts?: number;
 }
 
 export type NestingEngine = 'typescript' | 'rust-wasm';
 export type NestingAlgorithm = 'deterministic' | 'genetic';
+export type WasmSearchMode = 'single' | 'best-of-n';
 
 export interface NestingPreviewPayload {
   svgString: string;
@@ -63,6 +66,9 @@ export interface NestingRunStats {
   geneticSeed?: number;
   wasmFallback?: boolean;
   wasmFallbackReason?: string;
+  wasmSearchMode?: WasmSearchMode;
+  wasmAttempts?: number;
+  wasmBestAttempt?: number;
 }
 
 const resolveNestingEngine = (options: PackingOptions): NestingEngine =>

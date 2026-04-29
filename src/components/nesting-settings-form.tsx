@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/select';
 import { NestingGeneticSettings } from '@/components/nesting-genetic-settings';
 import { NestingRotationControl } from '@/components/nesting-rotation-control';
-import type { NestingEngine } from '@/lib/nesting';
+import { NestingWasmSettings } from '@/components/nesting-wasm-settings';
+import type { NestingEngine, WasmSearchMode } from '@/lib/nesting';
 
 interface NestingSettingsFormProps {
   nestingEngine: NestingEngine;
@@ -23,6 +24,8 @@ interface NestingSettingsFormProps {
   mutationRateValue: string;
   crossoverRateValue: string;
   eliteCountValue: string;
+  wasmSearchMode: WasmSearchMode;
+  wasmAttemptsValue: string;
   isNesting: boolean;
   onNestingEngineChange: (engine: NestingEngine) => void;
   onRotationCountChange: (rotationCount: number) => void;
@@ -34,6 +37,8 @@ interface NestingSettingsFormProps {
   onMutationRateChange: (value: string) => void;
   onCrossoverRateChange: (value: string) => void;
   onEliteCountChange: (value: string) => void;
+  onWasmSearchModeChange: (mode: WasmSearchMode) => void;
+  onWasmAttemptsChange: (value: string) => void;
 }
 
 export const NestingSettingsForm = ({
@@ -47,6 +52,8 @@ export const NestingSettingsForm = ({
   mutationRateValue,
   crossoverRateValue,
   eliteCountValue,
+  wasmSearchMode,
+  wasmAttemptsValue,
   isNesting,
   onNestingEngineChange,
   onRotationCountChange,
@@ -58,6 +65,8 @@ export const NestingSettingsForm = ({
   onMutationRateChange,
   onCrossoverRateChange,
   onEliteCountChange,
+  onWasmSearchModeChange,
+  onWasmAttemptsChange,
 }: NestingSettingsFormProps) => (
   <div className="flex min-h-[18rem] flex-col rounded-md border border-border/70 bg-muted/10 md:min-h-0">
     <div className="border-b border-border/70 px-3 py-2.5">
@@ -130,21 +139,31 @@ export const NestingSettingsForm = ({
             Lower values follow curves more closely but can run slower.
           </p>
         </div>
-        <NestingGeneticSettings
-          useGeneticSearch={useGeneticSearch}
-          populationSizeValue={populationSizeValue}
-          maxGenerationsValue={maxGenerationsValue}
-          mutationRateValue={mutationRateValue}
-          crossoverRateValue={crossoverRateValue}
-          eliteCountValue={eliteCountValue}
-          isNesting={isNesting}
-          onUseGeneticSearchChange={onUseGeneticSearchChange}
-          onPopulationSizeChange={onPopulationSizeChange}
-          onMaxGenerationsChange={onMaxGenerationsChange}
-          onMutationRateChange={onMutationRateChange}
-          onCrossoverRateChange={onCrossoverRateChange}
-          onEliteCountChange={onEliteCountChange}
-        />
+        {nestingEngine === 'rust-wasm' ? (
+          <NestingWasmSettings
+            wasmSearchMode={wasmSearchMode}
+            wasmAttemptsValue={wasmAttemptsValue}
+            isNesting={isNesting}
+            onWasmSearchModeChange={onWasmSearchModeChange}
+            onWasmAttemptsChange={onWasmAttemptsChange}
+          />
+        ) : (
+          <NestingGeneticSettings
+            useGeneticSearch={useGeneticSearch}
+            populationSizeValue={populationSizeValue}
+            maxGenerationsValue={maxGenerationsValue}
+            mutationRateValue={mutationRateValue}
+            crossoverRateValue={crossoverRateValue}
+            eliteCountValue={eliteCountValue}
+            isNesting={isNesting}
+            onUseGeneticSearchChange={onUseGeneticSearchChange}
+            onPopulationSizeChange={onPopulationSizeChange}
+            onMaxGenerationsChange={onMaxGenerationsChange}
+            onMutationRateChange={onMutationRateChange}
+            onCrossoverRateChange={onCrossoverRateChange}
+            onEliteCountChange={onEliteCountChange}
+          />
+        )}
       </div>
     </ScrollArea>
   </div>

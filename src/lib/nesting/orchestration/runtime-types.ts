@@ -24,6 +24,8 @@ export interface NormalizedPackingOptions extends Omit<
   | 'eliteCount'
   | 'useGeneticSearch'
   | 'nestingEngine'
+  | 'wasmSearchMode'
+  | 'wasmAttempts'
 > {
   nestingEngine: NonNullable<PackingOptions['nestingEngine']>;
   gap: number;
@@ -37,6 +39,8 @@ export interface NormalizedPackingOptions extends Omit<
   mutationRate: number;
   crossoverRate: number;
   eliteCount: number;
+  wasmSearchMode: NonNullable<PackingOptions['wasmSearchMode']>;
+  wasmAttempts: number;
 }
 
 export type GeneticExecutionMode = 'disabled' | 'enabled';

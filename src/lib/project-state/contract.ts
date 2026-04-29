@@ -48,6 +48,8 @@ export const packingOptionsSchema = z
     crossoverRate: z.number().optional(),
     eliteCount: z.number().optional(),
     geneticSeed: z.number().optional(),
+    wasmSearchMode: z.enum(['single', 'best-of-n']).optional(),
+    wasmAttempts: z.number().optional(),
   })
   .transform((options): PackingOptions => normalizePackingOptions(options));
 

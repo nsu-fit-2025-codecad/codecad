@@ -157,15 +157,15 @@ jobs:
         env:
           SVGNEST_WASM_REQUIRED: 'true'
 
-      - name: Verify committed SVGnest WASM artifact
-        run: git diff --exit-code -- public/nesting/polygon-packer.wasm
-
       - name: Upload WASM nesting package
         uses: actions/upload-artifact@v4
         with:
           name: polygon-packer-wasm
           path: public/nesting/polygon-packer.wasm
           if-no-files-found: error
+
+      - name: Verify committed SVGnest WASM artifact
+        run: git diff --exit-code -- public/nesting/polygon-packer.wasm
 
       - name: Build
         run: npm run build

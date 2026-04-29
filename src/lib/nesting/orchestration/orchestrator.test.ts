@@ -47,8 +47,12 @@ vi.mock('@/lib/nesting/genetic/fitness', () => ({
       return left.binsUsed - right.binsUsed;
     }
 
-    if (left.compactness !== right.compactness) {
-      return left.compactness < right.compactness ? -1 : 1;
+    if (left.usedArea !== right.usedArea) {
+      return left.usedArea < right.usedArea ? -1 : 1;
+    }
+
+    if (left.utilization !== right.utilization) {
+      return left.utilization > right.utilization ? -1 : 1;
     }
 
     if (left.height !== right.height) {
@@ -62,6 +66,21 @@ vi.mock('@/lib/nesting/genetic/fitness', () => ({
     return 0;
   }),
 }));
+
+const fitnessScore = (
+  overrides: Pick<
+    FitnessScore,
+    'unplacedCount' | 'binsUsed' | 'compactness' | 'width' | 'height'
+  >
+): FitnessScore => ({
+  invalidCount: 0,
+  usedArea: overrides.compactness,
+  materialArea: overrides.compactness,
+  utilization: 1,
+  lowerLeftScore: 0,
+  placementKey: '',
+  ...overrides,
+});
 
 const createResult = (id: string): NestResult => ({
   placements: [
@@ -100,6 +119,8 @@ const normalizedOptions: NormalizedPackingOptions = {
   mutationRate: 0.2,
   crossoverRate: 0.85,
   eliteCount: 2,
+  wasmSearchMode: 'best-of-n',
+  wasmAttempts: 8,
 };
 
 describe('runNestingEngine GA preview behavior', () => {
@@ -130,27 +151,27 @@ describe('runNestingEngine GA preview behavior', () => {
     const deterministicResult = createResult('deterministic');
     const gaWorseResult = createResult('ga-worse');
     const gaBetterResult = createResult('ga-better');
-    const deterministicFitness: FitnessScore = {
+    const deterministicFitness = fitnessScore({
       unplacedCount: 0,
       binsUsed: 1,
       compactness: 100,
       width: 10,
       height: 10,
-    };
-    const gaWorseFitness: FitnessScore = {
+    });
+    const gaWorseFitness = fitnessScore({
       unplacedCount: 0,
       binsUsed: 1,
       compactness: 120,
       width: 11,
       height: 11,
-    };
-    const gaBetterFitness: FitnessScore = {
+    });
+    const gaBetterFitness = fitnessScore({
       unplacedCount: 0,
       binsUsed: 1,
       compactness: 90,
       width: 9,
       height: 10,
-    };
+    });
     const progressEvents: Array<{
       generation?: number;
       previewPackedIds?: string[];
@@ -237,20 +258,20 @@ describe('runNestingEngine GA preview behavior', () => {
   it('keeps final selection deterministic when GA fitness is not better', () => {
     const deterministicResult = createResult('deterministic');
     const gaResult = createResult('ga-not-better');
-    const deterministicFitness: FitnessScore = {
+    const deterministicFitness = fitnessScore({
       unplacedCount: 0,
       binsUsed: 1,
       compactness: 80,
       width: 8,
       height: 10,
-    };
-    const gaFitness: FitnessScore = {
+    });
+    const gaFitness = fitnessScore({
       unplacedCount: 0,
       binsUsed: 1,
       compactness: 120,
       width: 11,
       height: 11,
-    };
+    });
 
     vi.mocked(placePartsGreedy).mockReturnValue(deterministicResult);
     vi.mocked(evaluateNestFitness).mockReturnValue(deterministicFitness);
