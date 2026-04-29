@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import makerjs from 'makerjs';
 import { describe, expect, it } from 'vitest';
+import { CAD_SNIPPETS, getCadSnippetParameters } from '@/lib/cad/snippets';
+import { cad, normalizeEditorModelResult } from '@/lib/cad/runtime';
+import { prepareNestInput } from '@/lib/nesting/orchestration/input-preparation';
 import type {
   NormalizedPackingOptions,
   PreparedNestInput,
@@ -166,4 +170,69 @@ describeIfWasm('SVGnest WASM runner', () => {
     expect(result.placements).toHaveLength(1);
     expect(result.notPlacedIds).toEqual([]);
   });
+
+  it('places a smaller part inside a placed part hole', async () => {
+    const result = await runSvgNest(
+      preparedInput(rectangleShape(130, 70), [
+        part('frame', shapeWithHole(80, 60, 20, 15, 40, 30)),
+        part('insert', rectangleShape(30, 20)),
+      ]),
+      options,
+      wasmBytes()
+    );
+
+    expect(result.placements.map((placement) => placement.id).sort()).toEqual([
+      'frame',
+      'insert',
+    ]);
+    expect(result.notPlacedIds).toEqual([]);
+
+    const frame = result.placements.find(
+      (placement) => placement.id === 'frame'
+    );
+    const insert = result.placements.find(
+      (placement) => placement.id === 'insert'
+    );
+
+    expect(insert!.x).toBeGreaterThanOrEqual(frame!.x + 20);
+    expect(insert!.x + 30).toBeLessThanOrEqual(frame!.x + 60);
+    expect(insert!.y).toBeGreaterThanOrEqual(frame!.y + 15);
+    expect(insert!.y + 20).toBeLessThanOrEqual(frame!.y + 45);
+  });
+
+  it.each([
+    'demoFrameInsert',
+    'demoPerforatedSheet',
+    'demoRoundedMix',
+  ] as const)(
+    'runs the %s CAD snippet without panicking',
+    async (snippetId) => {
+      const snippet = CAD_SNIPPETS[snippetId];
+      const snippetParameters = getCadSnippetParameters(snippetId);
+      const createModel = new Function(
+        'makerjs',
+        'cad',
+        ...snippetParameters.map((parameter) => parameter.name),
+        `return (function () {
+          ${snippet.code}
+        })();`
+      );
+      const model = normalizeEditorModelResult(
+        createModel(
+          makerjs,
+          cad,
+          ...snippetParameters.map((parameter) => parameter.value)
+        )
+      );
+      const targetId = 'target';
+      const { prepared } = prepareNestInput(model, targetId, options);
+
+      expect(prepared).not.toBeNull();
+      const result = await runSvgNest(prepared!, options, wasmBytes());
+
+      expect(result.placements.length + result.notPlacedIds.length).toBe(
+        prepared!.parts.length
+      );
+    }
+  );
 });
