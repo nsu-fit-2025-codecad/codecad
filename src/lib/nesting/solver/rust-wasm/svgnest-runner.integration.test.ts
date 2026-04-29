@@ -164,7 +164,8 @@ describe('SVGnest vendor patches', () => {
     );
 
     expect(placeFlow).toContain('Preserve individual path winding here.');
-    expect(placeFlow).not.toContain('get_combined_nfps(&total_nfps)');
+    expect(placeFlow).toContain('allowed_child_nfps');
+    expect(placeFlow).toContain('signed_area(&applied_nfp) > 0');
   });
 });
 

@@ -1,5 +1,5 @@
 use crate::clipper::constants::CLIPPER_SCALE;
-use crate::clipper::utils::{apply_nfps, get_final_nfp};
+use crate::clipper::utils::{apply_nfps, get_combined_nfps, get_final_nfp};
 use crate::geometry::point::Point;
 use crate::nesting::nfp_wrapper::NFPWrapper;
 use crate::nesting::place_content::PlaceContent;
@@ -235,6 +235,19 @@ pub fn calculate_combined_nfps(
     total_nfps
 }
 
+fn signed_area(points: &[Point<i32>]) -> i64 {
+    let mut area = 0_i64;
+    let point_count = points.len();
+
+    for i in 0..point_count {
+        let next = (i + 1) % point_count;
+        area += points[i].x as i64 * points[next].y as i64
+            - points[next].x as i64 * points[i].y as i64;
+    }
+
+    area
+}
+
 /// Get final NFPs by combining placed nodes' NFPs and subtracting from bin NFP
 /// Rust port of ClipperWrapper.getFinalNfps
 /// Computes the final NFP by combining all relevant NFPs and subtracting from bin NFP
@@ -258,18 +271,47 @@ pub fn get_final_nfps(
     bin_nfp: &NFPWrapper,
     placement: &[f32],
 ) -> Vec<Vec<Point<i32>>> {
-    // Calculate combined NFP
-    let combined_nfp = calculate_combined_nfps(place_content, placed, path, placement);
+    let mut forbidden_nfps: Vec<Vec<Point<i32>>> = Vec::new();
+    let mut allowed_child_nfps: Vec<Vec<Point<i32>>> = Vec::new();
+
+    for (i, placed_node) in placed.iter().enumerate() {
+        let key = PolygonNode::generate_nfp_cache_key(
+            place_content.rotations(),
+            false,
+            placed_node,
+            path,
+        );
+
+        if let Some(nfp_cache_value) = place_content.nfp_cache().get(&key) {
+            let offset = Point {
+                x: placement[i << 1],
+                y: placement[(i << 1) + 1],
+            };
+
+            for applied_nfp in apply_nfps(nfp_cache_value.clone(), &offset) {
+                if signed_area(&applied_nfp) > 0 {
+                    allowed_child_nfps.push(applied_nfp);
+                } else {
+                    forbidden_nfps.push(applied_nfp);
+                }
+            }
+        }
+    }
+
+    let combined_nfp = get_combined_nfps(&forbidden_nfps);
 
     if combined_nfp.is_empty() {
-        return Vec::new();
+        return allowed_child_nfps;
     }
 
     // Convert bin NFP to clipper format
     let clipper_bin_nfp = nfp_to_clipper(bin_nfp);
 
     // Get final NFP by subtracting combined NFP from bin NFP
-    get_final_nfp(&combined_nfp, &clipper_bin_nfp)
+    let mut final_nfp = get_final_nfp(&combined_nfp, &clipper_bin_nfp);
+    final_nfp.append(&mut allowed_child_nfps);
+
+    final_nfp
 }
 
 /// Creates the final result buffer containing placement data and fitness score
