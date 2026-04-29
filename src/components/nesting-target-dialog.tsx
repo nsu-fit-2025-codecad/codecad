@@ -17,7 +17,12 @@ import {
   resolveRotationSelection,
   rotationCountToAngles,
 } from '@/lib/nesting/polygon/rotations';
-import type { PackingOptions } from '@/lib/nesting';
+import { MAX_WASM_ATTEMPTS } from '@/lib/nesting/orchestration/options';
+import type {
+  NestingEngine,
+  PackingOptions,
+  WasmSearchMode,
+} from '@/lib/nesting';
 
 const resolveRotationFromOptions = (options: PackingOptions | undefined) =>
   resolveRotationSelection({
@@ -68,6 +73,9 @@ export const NestingTargetDialog = ({
   const [selectedTargetModelId, setSelectedTargetModelId] = useState<
     string | null
   >(initialTargetModelId);
+  const [nestingEngine, setNestingEngine] = useState<NestingEngine>(
+    initialOptions?.nestingEngine ?? 'typescript'
+  );
   const [gapValue, setGapValue] = useState(String(initialOptions?.gap ?? 0));
   const [rotationCount, setRotationCount] = useState(
     initialRotationSelection.displayRotationCount
@@ -98,6 +106,12 @@ export const NestingTargetDialog = ({
   const [eliteCountValue, setEliteCountValue] = useState(
     String(initialOptions?.eliteCount ?? 2)
   );
+  const [wasmSearchMode, setWasmSearchMode] = useState<WasmSearchMode>(
+    initialOptions?.wasmSearchMode ?? 'best-of-n'
+  );
+  const [wasmAttemptsValue, setWasmAttemptsValue] = useState(
+    String(initialOptions?.wasmAttempts ?? 8)
+  );
 
   useEffect(() => {
     if (!open) {
@@ -109,6 +123,7 @@ export const NestingTargetDialog = ({
       models.some((model) => model.id === initialTargetModelId);
 
     setSelectedTargetModelId(hasInitialTarget ? initialTargetModelId : null);
+    setNestingEngine(initialOptions?.nestingEngine ?? 'typescript');
     setGapValue(String(initialOptions?.gap ?? 0));
     const resolvedRotationSelection =
       resolveRotationFromOptions(initialOptions);
@@ -125,6 +140,8 @@ export const NestingTargetDialog = ({
     setMutationRateValue(String(initialOptions?.mutationRate ?? 0.2));
     setCrossoverRateValue(String(initialOptions?.crossoverRate ?? 0.85));
     setEliteCountValue(String(initialOptions?.eliteCount ?? 2));
+    setWasmSearchMode(initialOptions?.wasmSearchMode ?? 'best-of-n');
+    setWasmAttemptsValue(String(initialOptions?.wasmAttempts ?? 8));
   }, [initialOptions, initialTargetModelId, models, open]);
 
   const handleConfirm = () => {
@@ -164,8 +181,12 @@ export const NestingTargetDialog = ({
         Math.max(1, normalizedPopulationSize)
       )
     );
+    const normalizedWasmAttempts = Math.round(
+      parseAndClamp(wasmAttemptsValue, 8, 1, MAX_WASM_ATTEMPTS)
+    );
 
     onConfirm(selectedTargetModelId, {
+      nestingEngine,
       allowRotation: rotations.length > 1,
       rotationCount:
         legacyRotations === null ? normalizedRotationCount : undefined,
@@ -178,6 +199,8 @@ export const NestingTargetDialog = ({
       mutationRate: normalizedMutationRate,
       crossoverRate: normalizedCrossoverRate,
       eliteCount: normalizedEliteCount,
+      wasmSearchMode,
+      wasmAttempts: normalizedWasmAttempts,
     });
     onOpenChange(false);
   };
@@ -196,6 +219,7 @@ export const NestingTargetDialog = ({
               onSelect={setSelectedTargetModelId}
             />
             <NestingSettingsForm
+              nestingEngine={nestingEngine}
               rotationCount={rotationCount}
               gapValue={gapValue}
               curveToleranceValue={curveToleranceValue}
@@ -205,7 +229,10 @@ export const NestingTargetDialog = ({
               mutationRateValue={mutationRateValue}
               crossoverRateValue={crossoverRateValue}
               eliteCountValue={eliteCountValue}
+              wasmSearchMode={wasmSearchMode}
+              wasmAttemptsValue={wasmAttemptsValue}
               isNesting={isNesting}
+              onNestingEngineChange={setNestingEngine}
               onRotationCountChange={(value) => {
                 setLegacyRotations(null);
                 setRotationCount(value);
@@ -218,6 +245,8 @@ export const NestingTargetDialog = ({
               onMutationRateChange={setMutationRateValue}
               onCrossoverRateChange={setCrossoverRateValue}
               onEliteCountChange={setEliteCountValue}
+              onWasmSearchModeChange={setWasmSearchMode}
+              onWasmAttemptsChange={setWasmAttemptsValue}
             />
           </div>
         </div>

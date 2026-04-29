@@ -3,6 +3,8 @@ import { normalizeNumeric } from '@/lib/nesting/utils/math';
 import type { PackingOptions } from '@/lib/nesting';
 import type { NormalizedPackingOptions } from '@/lib/nesting/orchestration/runtime-types';
 
+export const MAX_WASM_ATTEMPTS = 10000;
+
 export const normalizePackingOptions = (
   options: PackingOptions
 ): NormalizedPackingOptions => {
@@ -14,9 +16,12 @@ export const normalizePackingOptions = (
   const populationSize = Math.round(
     normalizeNumeric(options.populationSize, 8, 2, 200)
   );
+  const wasmSearchMode =
+    options.wasmSearchMode === 'single' ? 'single' : 'best-of-n';
 
   return {
     ...options,
+    nestingEngine: options.nestingEngine ?? 'typescript',
     gap: normalizeNumeric(options.gap, 0, 0),
     allowRotation: resolvedRotationSelection.rotations.length > 1,
     rotationCount: resolvedRotationSelection.rotationCount ?? undefined,
@@ -41,5 +46,9 @@ export const normalizePackingOptions = (
       Number.isFinite(options.geneticSeed)
         ? Math.round(options.geneticSeed)
         : undefined,
+    wasmSearchMode,
+    wasmAttempts: Math.round(
+      normalizeNumeric(options.wasmAttempts, 8, 1, MAX_WASM_ATTEMPTS)
+    ),
   };
 };

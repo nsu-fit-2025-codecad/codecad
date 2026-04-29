@@ -14,7 +14,7 @@ export default [
     ignores: ['dist/**', 'build/**', 'node_modules/**'],
   },
   {
-    files: ['**/*.{js,jsx,ts,tsx}'],
+    files: ['**/*.{js,jsx,ts,tsx,mjs,cjs}'],
 
     plugins: {
       '@typescript-eslint': typescriptEslint,

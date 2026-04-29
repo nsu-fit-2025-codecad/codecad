@@ -5,6 +5,7 @@ import {
   packModelsIntoTargetModel,
 } from '@/lib/nesting';
 import { compareFitness } from '@/lib/nesting/genetic/fitness';
+import type { FitnessScore } from '@/lib/nesting/genetic/fitness';
 
 const getSize = (model: IModel) => {
   const extents = makerjs.measure.modelExtents(model);
@@ -503,13 +504,7 @@ describe('packModelsIntoNestingArea', () => {
       phase: string;
       previewSvgString?: string;
       previewPackedIds?: string[];
-      bestFitness?: {
-        unplacedCount: number;
-        binsUsed: number;
-        compactness: number;
-        width: number;
-        height: number;
-      };
+      bestFitness?: FitnessScore;
     }> = [];
 
     const result = packModelsIntoNestingArea(

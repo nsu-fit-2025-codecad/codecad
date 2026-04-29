@@ -3,7 +3,10 @@ import { prepareNestInput } from '@/lib/nesting/orchestration/input-preparation'
 import { applyPlacementToModelMap } from '@/lib/nesting/orchestration/model-assembly';
 import { layoutModelsInOverflowArea } from '@/lib/nesting/orchestration/overflow-layout';
 import { normalizePackingOptions } from '@/lib/nesting/orchestration/options';
-import { runNestingEngine } from '@/lib/nesting/orchestration/orchestrator';
+import {
+  runNestingEngine,
+  runNestingEngineAsync,
+} from '@/lib/nesting/orchestration/orchestrator';
 import { createProgressEmitter } from '@/lib/nesting/orchestration/progress';
 import { buildNestingStats } from '@/lib/nesting/orchestration/stats';
 import { renderModelToSvg } from '@/lib/svg-render';
@@ -23,9 +26,14 @@ export interface PackingOptions {
   crossoverRate?: number;
   eliteCount?: number;
   geneticSeed?: number;
+  nestingEngine?: NestingEngine;
+  wasmSearchMode?: WasmSearchMode;
+  wasmAttempts?: number;
 }
 
+export type NestingEngine = 'typescript' | 'rust-wasm';
 export type NestingAlgorithm = 'deterministic' | 'genetic';
+export type WasmSearchMode = 'single' | 'best-of-n';
 
 export interface NestingPreviewPayload {
   svgString: string;
@@ -47,6 +55,7 @@ export interface PackingRunCallbacks {
 }
 
 export interface NestingRunStats {
+  engine?: NestingEngine;
   algorithm: NestingAlgorithm;
   placedCount: number;
   notFitCount: number;
@@ -55,7 +64,15 @@ export interface NestingRunStats {
   generationsEvaluated?: number;
   evaluations?: number;
   geneticSeed?: number;
+  wasmFallback?: boolean;
+  wasmFallbackReason?: string;
+  wasmSearchMode?: WasmSearchMode;
+  wasmAttempts?: number;
+  wasmBestAttempt?: number;
 }
+
+const resolveNestingEngine = (options: PackingOptions): NestingEngine =>
+  options.nestingEngine ?? 'typescript';
 
 export interface PackModelsIntoNestingAreaResult {
   packedModels: IModelMap;
@@ -154,6 +171,116 @@ export function packModelsIntoNestingArea(
   };
 }
 
+export async function packModelsIntoNestingAreaAsync(
+  nestingArea: IModel,
+  modelsToNest: IModelMap,
+  options: PackingOptions = {},
+  callbacks: PackingRunCallbacks = {}
+): Promise<PackModelsIntoNestingAreaResult> {
+  if (resolveNestingEngine(options) === 'typescript') {
+    return packModelsIntoNestingArea(
+      nestingArea,
+      modelsToNest,
+      options,
+      callbacks
+    );
+  }
+
+  const startedAt = Date.now();
+  const emitProgress = createProgressEmitter(callbacks);
+  const normalizedOptions = normalizePackingOptions(options);
+  const rootModel: IModel = {
+    models: {
+      __target__: nestingArea,
+      ...modelsToNest,
+    },
+  };
+
+  emitProgress({
+    phase: 'preparing',
+    progress: 0.05,
+    message: 'Preparing nesting input',
+  });
+
+  const { prepared, didNotFitModels: initialDidNotFitModels } =
+    prepareNestInput(rootModel, '__target__', normalizedOptions);
+
+  emitProgress({
+    phase: 'preparing',
+    progress: 0.2,
+    message: 'Geometry prepared',
+  });
+
+  if (!prepared) {
+    const overflowDidNotFitModels = layoutModelsInOverflowArea(
+      initialDidNotFitModels,
+      makerjs.measure.modelExtents(nestingArea)
+    );
+
+    emitProgress({
+      phase: 'finalizing',
+      progress: 1,
+      message: 'Nesting finished',
+    });
+
+    return {
+      packedModels: {},
+      didNotFitModels: overflowDidNotFitModels,
+      stats: buildNestingStats({
+        algorithm: 'deterministic',
+        placements: [],
+        didNotFitModels: overflowDidNotFitModels,
+        packedModels: {},
+        startedAt,
+        extras: {
+          engine: normalizedOptions.nestingEngine,
+        },
+      }),
+    };
+  }
+
+  const engineResult = await runNestingEngineAsync(
+    prepared,
+    normalizedOptions,
+    {
+      onProgress: emitProgress,
+    }
+  );
+
+  emitProgress({
+    phase: 'finalizing',
+    progress: 0.97,
+    message: 'Finalizing result',
+  });
+
+  const assembledResult = applyPlacementToModelMap({
+    prepared,
+    placementResult: engineResult.placementResult,
+  });
+
+  emitProgress({
+    phase: 'finalizing',
+    progress: 1,
+    message: 'Nesting finished',
+  });
+
+  return {
+    packedModels: assembledResult.packedModels,
+    didNotFitModels: assembledResult.didNotFitModels,
+    stats: buildNestingStats({
+      algorithm: engineResult.algorithm,
+      placements: engineResult.placementResult.placements,
+      didNotFitModels: assembledResult.didNotFitModels,
+      packedModels: assembledResult.packedModels,
+      startedAt,
+      extras: {
+        ...engineResult.statsExtras,
+        engine: normalizedOptions.nestingEngine,
+      },
+    }),
+  };
+}
+
 export interface PackModelsIntoTargetModelResult {
   packedIds: Set<string>;
   notFitIds: Set<string>;
@@ -197,6 +324,63 @@ export function packModelsIntoTargetModel(
     options,
     callbacks
   );
+
+  model.models = {
+    [targetModelId]: nestingArea,
+    ...packedModels,
+    ...didNotFitModels,
+  };
+  const notFitModelIds = Object.keys(didNotFitModels);
+
+  return {
+    packedIds: new Set(Object.keys(packedModels)),
+    notFitIds: new Set(notFitModelIds),
+    svgString: renderModelToSvg(model),
+    stats,
+  };
+}
+
+export async function packModelsIntoTargetModelAsync(
+  model: IModel | null,
+  targetModelId: string,
+  options: PackingOptions = {},
+  callbacks: PackingRunCallbacks = {}
+): Promise<PackModelsIntoTargetModelResult | null> {
+  if (resolveNestingEngine(options) === 'typescript') {
+    return packModelsIntoTargetModel(model, targetModelId, options, callbacks);
+  }
+
+  if (!model || !model.models) {
+    return null;
+  }
+
+  const nestingArea = model.models[targetModelId];
+
+  if (!nestingArea) {
+    return null;
+  }
+
+  const modelsToNest: IModelMap = {};
+
+  Object.entries(model.models).forEach(([modelId, candidate]) => {
+    if (modelId === targetModelId) {
+      return;
+    }
+
+    modelsToNest[modelId] = candidate;
+  });
+
+  if (Object.keys(modelsToNest).length === 0) {
+    return null;
+  }
+
+  const { packedModels, didNotFitModels, stats } =
+    await packModelsIntoNestingAreaAsync(
+      nestingArea,
+      modelsToNest,
+      options,
+      callbacks
+    );
 
   model.models = {
     [targetModelId]: nestingArea,

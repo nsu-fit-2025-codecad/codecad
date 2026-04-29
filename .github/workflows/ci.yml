@@ -34,6 +34,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
       - name: Apply ESLint fixes
         run: npm run lint:fix
 
@@ -138,6 +148,24 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      - name: Build WASM nesting package
+        run: npm run wasm:build
+
+      - name: Smoke test SVGnest WASM nesting package
+        run: npx vitest run src/lib/nesting/solver/rust-wasm/svgnest-runner.integration.test.ts
+        env:
+          SVGNEST_WASM_REQUIRED: 'true'
+
+      - name: Upload WASM nesting package
+        uses: actions/upload-artifact@v4
+        with:
+          name: polygon-packer-wasm
+          path: public/nesting/polygon-packer.wasm
+          if-no-files-found: error
+
+      - name: Verify committed SVGnest WASM artifact
+        run: git diff --exit-code -- public/nesting/polygon-packer.wasm
 
       - name: Build
         run: npm run build

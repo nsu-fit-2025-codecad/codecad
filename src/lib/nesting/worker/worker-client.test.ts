@@ -35,6 +35,20 @@ class MockWorker {
   }
 }
 
+const fitnessScore = (compactness: number, width: number, height: number) => ({
+  unplacedCount: 0,
+  invalidCount: 0,
+  binsUsed: 1,
+  compactness,
+  usedArea: compactness,
+  materialArea: compactness,
+  utilization: compactness > 0 ? 1 : 0,
+  width,
+  height,
+  lowerLeftScore: 0,
+  placementKey: '',
+});
+
 describe('NestingWorkerClient', () => {
   const OriginalWorker = globalThis.Worker;
   const mockWorkers: MockWorker[] = [];
@@ -98,11 +112,8 @@ describe('NestingWorkerClient', () => {
           notFitCount: 1,
           durationMs: 12,
           fitness: {
+            ...fitnessScore(100, 10, 10),
             unplacedCount: 1,
-            binsUsed: 1,
-            compactness: 100,
-            width: 10,
-            height: 10,
           },
           evaluations: 16,
         },
@@ -178,13 +189,7 @@ describe('NestingWorkerClient', () => {
           placedCount: 0,
           notFitCount: 0,
           durationMs: 1,
-          fitness: {
-            unplacedCount: 0,
-            binsUsed: 1,
-            compactness: 0,
-            width: 0,
-            height: 0,
-          },
+          fitness: fitnessScore(0, 0, 0),
         },
       },
     });
@@ -236,13 +241,7 @@ describe('NestingWorkerClient', () => {
           placedCount: 0,
           notFitCount: 0,
           durationMs: 1,
-          fitness: {
-            unplacedCount: 0,
-            binsUsed: 1,
-            compactness: 0,
-            width: 0,
-            height: 0,
-          },
+          fitness: fitnessScore(0, 0, 0),
         },
       },
     });

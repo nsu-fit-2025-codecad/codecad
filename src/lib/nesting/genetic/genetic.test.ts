@@ -152,6 +152,137 @@ describe('fitness evaluation', () => {
     expect(firstFitness).toEqual(secondFitness);
     expect(compareFitness(firstFitness, secondFitness)).toBe(0);
   });
+
+  it('prefers the smaller transformed bounding box', () => {
+    const compact: NestResult = {
+      placements: [
+        { id: 'a', x: 0, y: 0, rotation: 0, shape: rectangleShape(20, 20) },
+        {
+          id: 'b',
+          x: 20,
+          y: 0,
+          rotation: 0,
+          shape: translateShape(rectangleShape(20, 20), 20, 0),
+        },
+      ],
+      notPlacedIds: [],
+    };
+    const spread: NestResult = {
+      placements: [
+        { id: 'a', x: 0, y: 0, rotation: 0, shape: rectangleShape(20, 20) },
+        {
+          id: 'b',
+          x: 80,
+          y: 0,
+          rotation: 0,
+          shape: translateShape(rectangleShape(20, 20), 80, 0),
+        },
+      ],
+      notPlacedIds: [],
+    };
+
+    expect(
+      compareFitness(evaluateNestFitness(compact), evaluateNestFitness(spread))
+    ).toBeLessThan(0);
+  });
+
+  it('uses utilization and lower-left placement as tie-breaks', () => {
+    const lowerLeft: NestResult = {
+      placements: [
+        {
+          id: 'a',
+          x: 0,
+          y: 0,
+          rotation: 0,
+          shape: rectangleShape(20, 20),
+        },
+      ],
+      notPlacedIds: [],
+    };
+    const shifted: NestResult = {
+      placements: [
+        {
+          id: 'a',
+          x: 10,
+          y: 10,
+          rotation: 0,
+          shape: translateShape(rectangleShape(20, 20), 10, 10),
+        },
+      ],
+      notPlacedIds: [],
+    };
+    const denser: NestResult = {
+      placements: [
+        {
+          id: 'a',
+          x: 0,
+          y: 0,
+          rotation: 0,
+          shape: rectangleShape(20, 20),
+        },
+        {
+          id: 'b',
+          x: 20,
+          y: 0,
+          rotation: 0,
+          shape: translateShape(rectangleShape(20, 10), 20, 0),
+        },
+      ],
+      notPlacedIds: [],
+    };
+    const sparseSameBounds: NestResult = {
+      placements: [
+        {
+          id: 'a',
+          x: 0,
+          y: 0,
+          rotation: 0,
+          shape: rectangleShape(20, 20),
+        },
+        {
+          id: 'b',
+          x: 20,
+          y: 0,
+          rotation: 0,
+          shape: translateShape(rectangleShape(5, 10), 20, 0),
+        },
+        {
+          id: 'c',
+          x: 35,
+          y: 10,
+          rotation: 0,
+          shape: translateShape(rectangleShape(5, 10), 35, 10),
+        },
+      ],
+      notPlacedIds: [],
+    };
+
+    expect(
+      compareFitness(
+        evaluateNestFitness(denser),
+        evaluateNestFitness(sparseSameBounds)
+      )
+    ).toBeLessThan(0);
+    expect(
+      compareFitness(
+        evaluateNestFitness(lowerLeft),
+        evaluateNestFitness(shifted)
+      )
+    ).toBeLessThan(0);
+  });
+
+  it('does not treat raw SVGnest-style placement shapes as a constant footprint', () => {
+    const rawShape = rectangleShape(20, 10);
+    const result: NestResult = {
+      placements: [
+        { id: 'a', x: 0, y: 0, rotation: 0, shape: rawShape },
+        { id: 'b', x: 50, y: 0, rotation: 0, shape: rawShape },
+      ],
+      notPlacedIds: [],
+    };
+
+    expect(evaluateNestFitness(result).usedArea).toBe(700);
+  });
 });
 
 describe('config hardening', () => {
