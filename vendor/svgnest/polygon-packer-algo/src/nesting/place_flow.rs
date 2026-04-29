@@ -1,5 +1,5 @@
 use crate::clipper::constants::CLIPPER_SCALE;
-use crate::clipper::utils::{apply_nfps, get_combined_nfps, get_final_nfp};
+use crate::clipper::utils::{apply_nfps, get_final_nfp};
 use crate::geometry::point::Point;
 use crate::nesting::nfp_wrapper::NFPWrapper;
 use crate::nesting::place_content::PlaceContent;
@@ -229,8 +229,10 @@ pub fn calculate_combined_nfps(
         }
     }
 
-    // Combine all NFPs using union
-    get_combined_nfps(&total_nfps)
+    // Preserve individual path winding here. SVGnest encodes part-in-part child
+    // NFPs as opposite-wound paths inside the parent NFP; pre-unioning can
+    // flatten that relationship before the final bin difference.
+    total_nfps
 }
 
 /// Get final NFPs by combining placed nodes' NFPs and subtracting from bin NFP

@@ -156,6 +156,16 @@ describe('SVGnest vendor patches', () => {
     expect(pairFlow).toContain('let size_b = polygon_b.size();');
     expect(pairFlow).not.toContain('let size_b = child.size();');
   });
+
+  it('keeps child NFP winding intact until final placement difference', () => {
+    const placeFlow = readFileSync(
+      resolve('vendor/svgnest/polygon-packer-algo/src/nesting/place_flow.rs'),
+      'utf8'
+    );
+
+    expect(placeFlow).toContain('Preserve individual path winding here.');
+    expect(placeFlow).not.toContain('get_combined_nfps(&total_nfps)');
+  });
 });
 
 describeIfWasm('SVGnest WASM runner', () => {
