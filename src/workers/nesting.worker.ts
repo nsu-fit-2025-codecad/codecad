@@ -1,4 +1,4 @@
-import { packModelsIntoTargetModel } from '@/lib/nesting';
+import { runNestingOnModel } from '@/lib/nesting';
 import type {
   NestingWorkerRequest,
   NestingWorkerResponse,
@@ -19,10 +19,12 @@ workerContext.onmessage = (event: MessageEvent<NestingWorkerRequest>) => {
   }
 
   try {
-    const result = packModelsIntoTargetModel(
-      message.model,
-      message.targetModelId,
-      message.options,
+    const result = runNestingOnModel(
+      {
+        model: message.model,
+        targetModelId: message.targetModelId,
+        options: message.options,
+      },
       {
         onProgress: (progress) => {
           const progressMessage: NestingWorkerResponse = {
@@ -44,7 +46,7 @@ workerContext.onmessage = (event: MessageEvent<NestingWorkerRequest>) => {
       type: 'result',
       runId: message.runId,
       result: {
-        model: message.model,
+        model: result.model,
         packedIds: Array.from(result.packedIds),
         notFitIds: Array.from(result.notFitIds),
         svgString: result.svgString,
