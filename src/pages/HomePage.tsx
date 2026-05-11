@@ -52,6 +52,7 @@ import {
 } from '@/lib/project-history/capture-scheduler';
 import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
 import { createDxfExport, type DxfExportRequest } from '@/lib/export/dxf';
+import { createSvgExport } from '@/lib/export/svg';
 import {
   createNestingRunReport,
   type NestingRunReport,
@@ -364,6 +365,24 @@ export const HomePage = () => {
   const exportDXF = () => {
     setIsExportDxfDialogOpen(true);
   };
+
+  const exportSVG = useCallback(() => {
+    try {
+      const result = createSvgExport({ svgString: svg });
+
+      downloadTextFile({
+        content: result.svg,
+        filename: result.filename,
+        type: 'image/svg+xml',
+      });
+      toast.success('SVG exported');
+    } catch (nextError) {
+      console.error('SVG export error:', nextError);
+      toast.error(
+        nextError instanceof Error ? nextError.message : 'SVG export failed'
+      );
+    }
+  }, [svg]);
 
   const handleExportDxf = useCallback((request: DxfExportRequest) => {
     try {
@@ -984,6 +1003,7 @@ export const HomePage = () => {
         onRunNesting={runNesting}
         onCopyShareUrl={copyShareUrl}
         onExportDXF={exportDXF}
+        onExportSVG={exportSVG}
         onOpenProjectLibrary={() => setIsProjectLibraryOpen(true)}
         onUndoProject={undoProject}
         onRedoProject={redoProject}
@@ -991,6 +1011,7 @@ export const HomePage = () => {
         canUndoProject={historyAvailability.canUndo}
         canRedoProject={historyAvailability.canRedo}
         canExportDXF={model !== null}
+        canExportSVG={svg.trim().length > 0}
         isNesting={isRunning}
         isDemoGuideOpen={isDemoPaneOpen}
       />

@@ -5,6 +5,7 @@ import { usePanesStore } from '@/store/panes-store';
 import {
   Boxes,
   Download,
+  FileImage,
   FolderOpen,
   Package,
   Redo2,
@@ -19,6 +20,7 @@ interface ToolbarProps {
   onRunNesting: () => void;
   onCopyShareUrl: () => void;
   onExportDXF: () => void;
+  onExportSVG: () => void;
   onOpenProjectLibrary: () => void;
   onUndoProject: () => void;
   onRedoProject: () => void;
@@ -26,6 +28,7 @@ interface ToolbarProps {
   canUndoProject?: boolean;
   canRedoProject?: boolean;
   canExportDXF?: boolean;
+  canExportSVG?: boolean;
   isNesting?: boolean;
   isDemoGuideOpen?: boolean;
   className?: string;
@@ -35,6 +38,7 @@ export const Toolbar = ({
   onRunNesting,
   onCopyShareUrl,
   onExportDXF,
+  onExportSVG,
   onOpenProjectLibrary,
   onUndoProject,
   onRedoProject,
@@ -42,6 +46,7 @@ export const Toolbar = ({
   canUndoProject = false,
   canRedoProject = false,
   canExportDXF = false,
+  canExportSVG = false,
   isNesting = false,
   isDemoGuideOpen = false,
   className,
@@ -120,6 +125,17 @@ export const Toolbar = ({
           disabled={!canExportDXF || isNesting}
         >
           <Download />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onExportSVG}
+          className="cursor-pointer"
+          size="icon"
+          title="Export SVG"
+          aria-label="Export SVG"
+          disabled={!canExportSVG || isNesting}
+        >
+          <FileImage />
         </Button>
         <Button
           variant="outline"
