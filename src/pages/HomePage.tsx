@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import makerjs, { IModel } from 'makerjs';
 import { toast } from 'sonner';
+import { EditorErrorStatus } from '@/components/editor-error-status';
 import { ParametersPane } from '@/components/parameters-pane';
-import { useEditorStore, useParametersStore } from '@/store/store';
+import {
+  DEFAULT_EDITOR_CODE,
+  useEditorStore,
+  useParametersStore,
+} from '@/store/store';
 import { cad, normalizeEditorModelResult } from '@/lib/cad';
 import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
@@ -46,6 +51,17 @@ import {
 } from '@/lib/project-history/capture-scheduler';
 import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
 import { createDxfExport, type DxfExportRequest } from '@/lib/export/dxf';
+import {
+  addEditorRecoverySnapshot,
+  createEditorEvaluationError,
+  createEditorRecoverySnapshot,
+  type EditorEvaluationError,
+  type EditorRecoverySnapshot,
+} from '@/lib/editor-recovery';
+import {
+  DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippetParameters,
+} from '@/lib/cad/snippets';
 import { cn } from '@/lib/utils';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
@@ -74,6 +90,12 @@ export const HomePage = () => {
   const [isExportDxfDialogOpen, setIsExportDxfDialogOpen] = useState(false);
   const [nestingExportContext, setNestingExportContext] =
     useState<NestingExportContext | null>(null);
+  const [editorError, setEditorError] = useState<EditorEvaluationError | null>(
+    null
+  );
+  const [editorRecoverySnapshots, setEditorRecoverySnapshots] = useState<
+    EditorRecoverySnapshot[]
+  >([]);
   const [historyAvailability, setHistoryAvailability] = useState({
     canUndo: false,
     canRedo: false,
@@ -231,7 +253,7 @@ export const HomePage = () => {
       runtimeParameters = useParametersStore.getState().parameters
     ) => {
       if (!sourceCode) {
-        return;
+        return false;
       }
 
       try {
@@ -258,10 +280,21 @@ export const HomePage = () => {
 
         setSvg(renderModelToSvg(nextModel));
         bumpModelRevision();
+        setEditorError(null);
+        setEditorRecoverySnapshots((snapshots) =>
+          addEditorRecoverySnapshot({
+            snapshots,
+            snapshot: createEditorRecoverySnapshot({
+              code: sourceCode,
+              parameters: runtimeParameters,
+            }),
+          })
+        );
+        return true;
       } catch (nextError) {
         console.error('Error:', nextError);
-        setSvg('');
-        bumpModelRevision();
+        setEditorError(createEditorEvaluationError(nextError));
+        return false;
       }
     },
     [bumpModelRevision, update]
@@ -307,7 +340,11 @@ export const HomePage = () => {
     }
 
     flushPendingCodeSnapshot();
-    evaluateSourceCode(code);
+    const didEvaluate = evaluateSourceCode(code);
+
+    if (!didEvaluate) {
+      toast.error('Code did not run. Showing the last valid preview.');
+    }
   }, [code, evaluateSourceCode, flushPendingCodeSnapshot]);
 
   const applyHistorySnapshot = useCallback(
@@ -563,6 +600,47 @@ export const HomePage = () => {
     evaluateCurrentProjectIfAutorun();
   }, [commitCurrentProjectSnapshot, evaluateCurrentProjectIfAutorun]);
 
+  const restoreEditorSnapshot = useCallback(
+    (snapshot: EditorRecoverySnapshot) => {
+      flushPendingCodeSnapshot();
+      replaceAllParameters(snapshot.parameters);
+      editCode(snapshot.code);
+      evaluateSourceCode(snapshot.code, snapshot.parameters);
+      commitCurrentProjectSnapshot({
+        code: snapshot.code,
+        parameters: snapshot.parameters,
+      });
+    },
+    [
+      commitCurrentProjectSnapshot,
+      editCode,
+      evaluateSourceCode,
+      flushPendingCodeSnapshot,
+      replaceAllParameters,
+    ]
+  );
+
+  const resetDefaultScene = useCallback(() => {
+    const defaultParameters = getCadSnippetParameters(
+      DEFAULT_EDITOR_SNIPPET_ID
+    );
+
+    flushPendingCodeSnapshot();
+    replaceAllParameters(defaultParameters);
+    editCode(DEFAULT_EDITOR_CODE);
+    evaluateSourceCode(DEFAULT_EDITOR_CODE, defaultParameters);
+    commitCurrentProjectSnapshot({
+      code: DEFAULT_EDITOR_CODE,
+      parameters: defaultParameters,
+    });
+  }, [
+    commitCurrentProjectSnapshot,
+    editCode,
+    evaluateSourceCode,
+    flushPendingCodeSnapshot,
+    replaceAllParameters,
+  ]);
+
   useEffect(() => {
     const handleProjectHistoryHotkey = (event: KeyboardEvent) => {
       const action = getProjectHistoryHotkeyAction(event);
@@ -688,6 +766,16 @@ export const HomePage = () => {
           error={error}
           onCancel={cancelNestingRun}
           onDismiss={dismissNestingStatus}
+        />
+      )}
+      {editorError && (
+        <EditorErrorStatus
+          className="fixed top-4 left-1/2 z-20 -translate-x-1/2"
+          error={editorError}
+          latestSnapshot={editorRecoverySnapshots[0] ?? null}
+          onRestoreSnapshot={restoreEditorSnapshot}
+          onResetDefaultScene={resetDefaultScene}
+          onDismiss={() => setEditorError(null)}
         />
       )}
       {isDemoPaneOpen && (
