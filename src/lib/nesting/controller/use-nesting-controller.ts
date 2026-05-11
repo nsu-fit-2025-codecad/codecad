@@ -136,8 +136,10 @@ export interface UseNestingControllerResult {
 
 export interface NestingRunExportContext {
   targetModelId: string;
+  options: PackingOptions;
   packedIds: Set<string>;
   notFitIds: Set<string>;
+  stats: NestingRunStats;
 }
 
 const DEFAULT_NESTING_OPTIONS = normalizePackingOptions({
@@ -269,8 +271,10 @@ export const useNestingController = ({
       setPreviewState(createEmptyNestingPreviewState());
       return {
         targetModelId,
+        options: normalizedOptions,
         packedIds: result.packedIds,
         notFitIds: result.notFitIds,
+        stats: result.stats,
       };
     } catch (nextError) {
       setIsStatusDismissed(false);

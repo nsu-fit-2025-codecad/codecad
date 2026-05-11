@@ -52,6 +52,10 @@ import {
 import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
 import { createDxfExport, type DxfExportRequest } from '@/lib/export/dxf';
 import {
+  createNestingRunReport,
+  type NestingRunReport,
+} from '@/lib/nesting/report';
+import {
   addEditorRecoverySnapshot,
   createEditorEvaluationError,
   createEditorRecoverySnapshot,
@@ -90,6 +94,8 @@ export const HomePage = () => {
   const [isExportDxfDialogOpen, setIsExportDxfDialogOpen] = useState(false);
   const [nestingExportContext, setNestingExportContext] =
     useState<NestingExportContext | null>(null);
+  const [lastNestingReport, setLastNestingReport] =
+    useState<NestingRunReport | null>(null);
   const [editorError, setEditorError] = useState<EditorEvaluationError | null>(
     null
   );
@@ -674,6 +680,71 @@ export const HomePage = () => {
     setIsDialogOpen(true);
   };
 
+  const runTrackedNesting = useCallback(
+    async (targetModelId: string, options: typeof nestingOptions) => {
+      flushPendingCodeSnapshot();
+      setTrackedNestingOptions(options);
+      selectModel(targetModelId);
+      commitCurrentProjectSnapshot({
+        nestingOptions: options,
+        selectedTargetModelId: targetModelId,
+      });
+      const result = await runNestingForTarget(targetModelId, options);
+
+      if (!result) {
+        return;
+      }
+
+      setNestingExportContext({
+        ...result,
+        modelRevision: getModelRevision(),
+      });
+      setLastNestingReport(
+        createNestingRunReport({
+          targetModelId,
+          options: result.options,
+          packedIds: result.packedIds,
+          notFitIds: result.notFitIds,
+          stats: result.stats,
+          modelRevision: getModelRevision(),
+        })
+      );
+    },
+    [
+      commitCurrentProjectSnapshot,
+      flushPendingCodeSnapshot,
+      getModelRevision,
+      runNestingForTarget,
+      selectModel,
+      setTrackedNestingOptions,
+    ]
+  );
+
+  const repeatLastNestingRun = useCallback(() => {
+    if (!lastNestingReport || isRunning) {
+      return;
+    }
+
+    void runTrackedNesting(
+      lastNestingReport.targetModelId,
+      lastNestingReport.options
+    );
+  }, [isRunning, lastNestingReport, runTrackedNesting]);
+
+  const copyLastNestingReport = useCallback(async () => {
+    if (!lastNestingReport) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(lastNestingReport.text);
+      toast.success('Nesting report copied');
+    } catch (nextError) {
+      console.error('Failed to copy nesting report:', nextError);
+      toast.error('Could not copy nesting report');
+    }
+  }, [lastNestingReport]);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
       <WorkbenchLayout
@@ -729,23 +800,7 @@ export const HomePage = () => {
         initialOptions={nestingOptions}
         isNesting={isRunning}
         onOpenChange={setIsDialogOpen}
-        onConfirm={async (targetModelId, options) => {
-          flushPendingCodeSnapshot();
-          setTrackedNestingOptions(options);
-          selectModel(targetModelId);
-          commitCurrentProjectSnapshot({
-            nestingOptions: options,
-            selectedTargetModelId: targetModelId,
-          });
-          const result = await runNestingForTarget(targetModelId, options);
-
-          if (result) {
-            setNestingExportContext({
-              ...result,
-              modelRevision: getModelRevision(),
-            });
-          }
-        }}
+        onConfirm={runTrackedNesting}
       />
       <ExportDxfDialog
         open={isExportDxfDialogOpen}
@@ -765,6 +820,8 @@ export const HomePage = () => {
           stats={stats}
           error={error}
           onCancel={cancelNestingRun}
+          onCopyReport={lastNestingReport ? copyLastNestingReport : undefined}
+          onRepeatLastRun={lastNestingReport ? repeatLastNestingRun : undefined}
           onDismiss={dismissNestingStatus}
         />
       )}
