@@ -65,7 +65,9 @@ import {
 } from '@/lib/editor-recovery';
 import {
   DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippet,
   getCadSnippetParameters,
+  type CadSnippetId,
 } from '@/lib/cad/snippets';
 import {
   createLocalProjectRecord,
@@ -705,6 +707,37 @@ export const HomePage = () => {
     ]
   );
 
+  const handleLoadSnippet = useCallback(
+    (snippetId: CadSnippetId) => {
+      const snippet = getCadSnippet(snippetId);
+      const snippetParameters = getCadSnippetParameters(snippetId);
+
+      flushPendingCodeSnapshot();
+      replaceAllParameters(snippetParameters);
+      openParametersPane();
+      setActiveDemoSceneId(null);
+      editCode(snippet.code);
+
+      if (!settings.autorun) {
+        evaluateSourceCode(snippet.code, snippetParameters);
+      }
+
+      commitCurrentProjectSnapshot({
+        code: snippet.code,
+        parameters: snippetParameters,
+      });
+    },
+    [
+      commitCurrentProjectSnapshot,
+      editCode,
+      evaluateSourceCode,
+      flushPendingCodeSnapshot,
+      openParametersPane,
+      replaceAllParameters,
+      settings.autorun,
+    ]
+  );
+
   const applyDemoNestingPreset = useCallback(
     (_sceneId: MvpDemoSceneId, presetId: MvpDemoNestingPresetId) => {
       const preset = getMvpDemoNestingPreset(presetId);
@@ -1025,6 +1058,7 @@ export const HomePage = () => {
           )}
           onClose={closeDemoPane}
           onLoadScene={handleLoadDemoScene}
+          onLoadSnippet={handleLoadSnippet}
           onPrepareNestingPreset={applyDemoNestingPreset}
         />
       )}
