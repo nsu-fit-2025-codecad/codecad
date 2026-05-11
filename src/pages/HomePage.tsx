@@ -7,6 +7,10 @@ import { cad, normalizeEditorModelResult } from '@/lib/cad';
 import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
+import {
+  ExportDxfDialog,
+  type NestingExportContext,
+} from '@/components/export-dxf-dialog';
 import { Toolbar } from '@/components/toolbar';
 import { usePanesStore } from '@/store/panes-store';
 import { WorkbenchLayout } from '@/components/workbench-layout';
@@ -41,6 +45,7 @@ import {
   type ProjectHistoryCaptureScheduler,
 } from '@/lib/project-history/capture-scheduler';
 import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
+import { createDxfExport, type DxfExportRequest } from '@/lib/export/dxf';
 import { cn } from '@/lib/utils';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
@@ -66,6 +71,9 @@ export const HomePage = () => {
   const [model, setModel] = useState<IModel | null>(null);
   const [activeDemoSceneId, setActiveDemoSceneId] =
     useState<MvpDemoSceneId | null>(null);
+  const [isExportDxfDialogOpen, setIsExportDxfDialogOpen] = useState(false);
+  const [nestingExportContext, setNestingExportContext] =
+    useState<NestingExportContext | null>(null);
   const [historyAvailability, setHistoryAvailability] = useState({
     canUndo: false,
     canRedo: false,
@@ -260,35 +268,38 @@ export const HomePage = () => {
   );
 
   const exportDXF = () => {
-    if (!model) {
-      alert('No model to export');
-      return;
-    }
+    setIsExportDxfDialogOpen(true);
+  };
 
+  const handleExportDxf = useCallback((request: DxfExportRequest) => {
     try {
-      const dxf = makerjs.exporter.toDXF(model, {
-        units: 'Millimeter',
-        usePOLYLINE: true,
-      });
-
-      const blob = new Blob([dxf], {
+      const result = createDxfExport(request);
+      const blob = new Blob([result.dxf], {
         type: 'application/dxf',
       });
-
       const url = URL.createObjectURL(blob);
-
       const link = document.createElement('a');
+
       link.href = url;
-      link.download = `drawing_${Date.now()}.dxf`;
+      link.download = result.filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       URL.revokeObjectURL(url);
+
+      setIsExportDxfDialogOpen(false);
+      toast.success(
+        `DXF exported (${result.validation.selectedCount} model${
+          result.validation.selectedCount === 1 ? '' : 's'
+        })`
+      );
     } catch (nextError) {
       console.error('DXF export error:', nextError);
+      toast.error(
+        nextError instanceof Error ? nextError.message : 'DXF export failed'
+      );
     }
-  };
+  }, []);
 
   const evalInput = useCallback(() => {
     if (!code) {
@@ -602,11 +613,13 @@ export const HomePage = () => {
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
         onRunNesting={runNesting}
         onCopyShareUrl={copyShareUrl}
+        onExportDXF={exportDXF}
         onUndoProject={undoProject}
         onRedoProject={redoProject}
         onToggleDemoGuide={toggleDemoPane}
         canUndoProject={historyAvailability.canUndo}
         canRedoProject={historyAvailability.canRedo}
+        canExportDXF={model !== null}
         isNesting={isRunning}
         isDemoGuideOpen={isDemoPaneOpen}
       />
@@ -625,8 +638,25 @@ export const HomePage = () => {
             nestingOptions: options,
             selectedTargetModelId: targetModelId,
           });
-          await runNestingForTarget(targetModelId, options);
+          const result = await runNestingForTarget(targetModelId, options);
+
+          if (result) {
+            setNestingExportContext({
+              ...result,
+              modelRevision: getModelRevision(),
+            });
+          }
         }}
+      />
+      <ExportDxfDialog
+        open={isExportDxfDialogOpen}
+        model={model}
+        models={availableModels}
+        selectedModelId={selectedModelId}
+        currentModelRevision={getModelRevision()}
+        nestingExportContext={nestingExportContext}
+        onOpenChange={setIsExportDxfDialogOpen}
+        onExport={handleExportDxf}
       />
       {isStatusVisible && (
         <NestingStatus
@@ -654,7 +684,6 @@ export const HomePage = () => {
       {isModelsPaneOpen && (
         <ModelsPane
           className="fixed left-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
-          onExportDXF={exportDXF}
           onClose={closeModelsPane}
           onSelectModel={handleSelectModel}
           onClearSelectedModel={handleClearSelectedModel}

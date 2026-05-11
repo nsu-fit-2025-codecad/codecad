@@ -129,9 +129,15 @@ export interface UseNestingControllerResult {
   runNestingForTarget: (
     targetModelId: string,
     options?: PackingOptions
-  ) => Promise<void>;
+  ) => Promise<NestingRunExportContext | null>;
   cancelNestingRun: () => void;
   dismissNestingStatus: () => void;
+}
+
+export interface NestingRunExportContext {
+  targetModelId: string;
+  packedIds: Set<string>;
+  notFitIds: Set<string>;
 }
 
 const DEFAULT_NESTING_OPTIONS = normalizePackingOptions({
@@ -185,7 +191,7 @@ export const useNestingController = ({
     options: PackingOptions = nestingOptions
   ) => {
     if (!model || isRunning) {
-      return;
+      return null;
     }
 
     const normalizedOptions = normalizePackingOptions(options);
@@ -252,7 +258,7 @@ export const useNestingController = ({
         })
       ) {
         setPreviewState(createEmptyNestingPreviewState());
-        return;
+        return null;
       }
 
       setModel(result.model);
@@ -261,6 +267,11 @@ export const useNestingController = ({
       setSvg(result.svgString);
       setStats(result.stats);
       setPreviewState(createEmptyNestingPreviewState());
+      return {
+        targetModelId,
+        packedIds: result.packedIds,
+        notFitIds: result.notFitIds,
+      };
     } catch (nextError) {
       setIsStatusDismissed(false);
       setError(
@@ -269,6 +280,7 @@ export const useNestingController = ({
           : 'Nesting failed unexpectedly.'
       );
       setPreviewState(createEmptyNestingPreviewState());
+      return null;
     } finally {
       if (activeRunTokenRef.current === runToken) {
         activeRunTokenRef.current = null;
