@@ -14,7 +14,6 @@ import { X } from 'lucide-react';
 import React from 'react';
 
 interface ModelsPaneProps {
-  onExportDXF: () => void;
   onClose: () => void;
   onSelectModel?: (modelId: string) => void;
   onClearSelectedModel?: () => void;
@@ -22,7 +21,6 @@ interface ModelsPaneProps {
 }
 
 export const ModelsPane = ({
-  onExportDXF,
   onClose,
   onSelectModel,
   onClearSelectedModel,
@@ -54,9 +52,6 @@ export const ModelsPane = ({
             <X />
           </Button>
         </div>
-        <Button className="cursor-pointer" onClick={onExportDXF}>
-          Export DXF
-        </Button>
       </CardHeader>
       <ScrollArea className="w-full">
         <CardContent>

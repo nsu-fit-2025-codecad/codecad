@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { usePanesStore } from '@/store/panes-store';
 import {
   Boxes,
+  Download,
   Package,
   Redo2,
   Share2,
@@ -16,11 +17,13 @@ import { ThemeToggle } from '@/components/theme-toggle';
 interface ToolbarProps {
   onRunNesting: () => void;
   onCopyShareUrl: () => void;
+  onExportDXF: () => void;
   onUndoProject: () => void;
   onRedoProject: () => void;
   onToggleDemoGuide: () => void;
   canUndoProject?: boolean;
   canRedoProject?: boolean;
+  canExportDXF?: boolean;
   isNesting?: boolean;
   isDemoGuideOpen?: boolean;
   className?: string;
@@ -29,11 +32,13 @@ interface ToolbarProps {
 export const Toolbar = ({
   onRunNesting,
   onCopyShareUrl,
+  onExportDXF,
   onUndoProject,
   onRedoProject,
   onToggleDemoGuide,
   canUndoProject = false,
   canRedoProject = false,
+  canExportDXF = false,
   isNesting = false,
   isDemoGuideOpen = false,
   className,
@@ -101,6 +106,17 @@ export const Toolbar = ({
           disabled={isNesting}
         >
           <Package />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onExportDXF}
+          className="cursor-pointer"
+          size="icon"
+          title="Export DXF"
+          aria-label="Export DXF"
+          disabled={!canExportDXF || isNesting}
+        >
+          <Download />
         </Button>
         <Button
           variant="outline"
