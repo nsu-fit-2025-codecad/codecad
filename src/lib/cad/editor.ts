@@ -1,4 +1,5 @@
 import { getCadSnippetEditorCode, type CadSnippetId } from '@/lib/cad/snippets';
+import { getCadEditorSnippetCompletions } from '@/lib/content/registry';
 
 const CAD_EDITOR_EXTRA_LIB_PATH = 'ts:cad-runtime-globals.d.ts';
 
@@ -554,7 +555,10 @@ export const configureCadEditor = (monaco: MonacoEditorApi): void => {
           suggestions: createCompletionItems(
             monaco,
             range,
-            CAD_EDITOR_SNIPPETS
+            getCadEditorSnippetCompletions().map((definition) => ({
+              ...definition,
+              kind: 'snippet',
+            }))
           ),
         };
       },
