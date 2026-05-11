@@ -34,7 +34,7 @@ export const ParametersPane = ({
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   return (
-    <Card className={cn(className, 'flex flex-col overflow-hidden')}>
+    <Card className={cn('flex h-full flex-col overflow-hidden', className)}>
       <CardHeader className="gap-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Parameters</CardTitle>
@@ -54,7 +54,7 @@ export const ParametersPane = ({
           />
         </div>
       </CardHeader>
-      <ScrollArea className="w-full">
+      <ScrollArea className="min-h-0 w-full flex-1">
         <CardContent>
           <FieldSet>
             {parameters.map((parameter) => (
