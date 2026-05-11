@@ -5,6 +5,7 @@ import { usePanesStore } from '@/store/panes-store';
 import {
   Boxes,
   Download,
+  FolderOpen,
   Package,
   Redo2,
   Share2,
@@ -18,6 +19,7 @@ interface ToolbarProps {
   onRunNesting: () => void;
   onCopyShareUrl: () => void;
   onExportDXF: () => void;
+  onOpenProjectLibrary: () => void;
   onUndoProject: () => void;
   onRedoProject: () => void;
   onToggleDemoGuide: () => void;
@@ -33,6 +35,7 @@ export const Toolbar = ({
   onRunNesting,
   onCopyShareUrl,
   onExportDXF,
+  onOpenProjectLibrary,
   onUndoProject,
   onRedoProject,
   onToggleDemoGuide,
@@ -117,6 +120,16 @@ export const Toolbar = ({
           disabled={!canExportDXF || isNesting}
         >
           <Download />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onOpenProjectLibrary}
+          className="cursor-pointer"
+          size="icon"
+          title="Project Library"
+          aria-label="Project Library"
+        >
+          <FolderOpen />
         </Button>
         <Button
           variant="outline"
