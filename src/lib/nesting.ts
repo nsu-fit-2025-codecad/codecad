@@ -63,6 +63,29 @@ export interface PackModelsIntoNestingAreaResult {
   stats: NestingRunStats;
 }
 
+export interface NestingAreaRunRequest {
+  nestingArea: IModel;
+  modelsToNest: IModelMap;
+  options?: PackingOptions;
+}
+
+export interface ModelNestingRunRequest {
+  model: IModel | null;
+  targetModelId: string;
+  options?: PackingOptions;
+  cloneInput?: boolean;
+}
+
+export interface ModelNestingRunResult {
+  model: IModel;
+  packedModels: IModelMap;
+  didNotFitModels: IModelMap;
+  packedIds: Set<string>;
+  notFitIds: Set<string>;
+  svgString: string;
+  stats: NestingRunStats;
+}
+
 export function packModelsIntoNestingArea(
   nestingArea: IModel,
   modelsToNest: IModelMap,
@@ -154,32 +177,37 @@ export function packModelsIntoNestingArea(
   };
 }
 
-export interface PackModelsIntoTargetModelResult {
-  packedIds: Set<string>;
-  notFitIds: Set<string>;
-  svgString: string;
-  stats: NestingRunStats;
-}
-
-export function packModelsIntoTargetModel(
-  model: IModel | null,
-  targetModelId: string,
-  options: PackingOptions = {},
+export const runNestingInArea = (
+  request: NestingAreaRunRequest,
   callbacks: PackingRunCallbacks = {}
-): PackModelsIntoTargetModelResult | null {
+): PackModelsIntoNestingAreaResult =>
+  packModelsIntoNestingArea(
+    request.nestingArea,
+    request.modelsToNest,
+    request.options,
+    callbacks
+  );
+
+export function runNestingOnModel(
+  request: ModelNestingRunRequest,
+  callbacks: PackingRunCallbacks = {}
+): ModelNestingRunResult | null {
+  const { model, targetModelId, options = {}, cloneInput = true } = request;
+
   if (!model || !model.models) {
     return null;
   }
 
-  const nestingArea = model.models[targetModelId];
+  const workingModel = cloneInput ? makerjs.model.clone(model) : model;
+  const nestingArea = workingModel.models?.[targetModelId];
 
-  if (!nestingArea) {
+  if (!workingModel.models || !nestingArea) {
     return null;
   }
 
   const modelsToNest: IModelMap = {};
 
-  Object.entries(model.models).forEach(([modelId, candidate]) => {
+  Object.entries(workingModel.models).forEach(([modelId, candidate]) => {
     if (modelId === targetModelId) {
       return;
     }
@@ -198,7 +226,7 @@ export function packModelsIntoTargetModel(
     callbacks
   );
 
-  model.models = {
+  workingModel.models = {
     [targetModelId]: nestingArea,
     ...packedModels,
     ...didNotFitModels,
@@ -206,9 +234,47 @@ export function packModelsIntoTargetModel(
   const notFitModelIds = Object.keys(didNotFitModels);
 
   return {
+    model: workingModel,
+    packedModels,
+    didNotFitModels,
     packedIds: new Set(Object.keys(packedModels)),
     notFitIds: new Set(notFitModelIds),
-    svgString: renderModelToSvg(model),
+    svgString: renderModelToSvg(workingModel),
     stats,
+  };
+}
+
+export interface PackModelsIntoTargetModelResult {
+  packedIds: Set<string>;
+  notFitIds: Set<string>;
+  svgString: string;
+  stats: NestingRunStats;
+}
+
+export function packModelsIntoTargetModel(
+  model: IModel | null,
+  targetModelId: string,
+  options: PackingOptions = {},
+  callbacks: PackingRunCallbacks = {}
+): PackModelsIntoTargetModelResult | null {
+  const result = runNestingOnModel(
+    {
+      model,
+      targetModelId,
+      options,
+      cloneInput: false,
+    },
+    callbacks
+  );
+
+  if (!result) {
+    return null;
+  }
+
+  return {
+    packedIds: result.packedIds,
+    notFitIds: result.notFitIds,
+    svgString: result.svgString,
+    stats: result.stats,
   };
 }

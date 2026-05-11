@@ -3,6 +3,8 @@ import makerjs, { IModel, IModelMap } from 'makerjs';
 import {
   packModelsIntoNestingArea,
   packModelsIntoTargetModel,
+  runNestingInArea,
+  runNestingOnModel,
 } from '@/lib/nesting';
 import { compareFitness } from '@/lib/nesting/genetic/fitness';
 
@@ -91,6 +93,22 @@ const extractViewBoxSize = (svgString: string) => {
 };
 
 describe('packModelsIntoNestingArea', () => {
+  it('exposes a request-shaped area API for library consumers', () => {
+    const target = new makerjs.models.Rectangle(100, 80);
+    const result = runNestingInArea({
+      nestingArea: target,
+      modelsToNest: {
+        part: new makerjs.models.Rectangle(40, 30),
+      },
+      options: {
+        useGeneticSearch: false,
+      },
+    });
+
+    expect(Object.keys(result.packedModels)).toEqual(['part']);
+    expect(result.stats.placedCount).toBe(1);
+  });
+
   it('packs with 90 degree rotation when enabled', () => {
     const target = new makerjs.models.Rectangle(100, 80);
     const part = new makerjs.models.Rectangle(70, 90);
@@ -576,6 +594,30 @@ describe('packModelsIntoNestingArea', () => {
 });
 
 describe('packModelsIntoTargetModel', () => {
+  it('exposes an immutable model-level API for library consumers', () => {
+    const root: IModel = {
+      models: {
+        target: new makerjs.models.Rectangle(100, 100),
+        a: new makerjs.models.Rectangle(40, 40),
+      },
+    };
+
+    const result = runNestingOnModel({
+      model: root,
+      targetModelId: 'target',
+      options: { useGeneticSearch: false },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.model).not.toBe(root);
+    expect(result?.packedIds.has('a')).toBe(true);
+    expect(result?.svgString).toContain('<svg');
+
+    const originalAExtents = getExtentsOrThrow(root.models!.a);
+    expect(originalAExtents.low[0]).toBeCloseTo(0, 6);
+    expect(originalAExtents.low[1]).toBeCloseTo(0, 6);
+  });
+
   it('keeps overflow models visible with a compact deterministic layout', () => {
     const sourceA = new makerjs.models.Rectangle(80, 80);
     const sourceB = new makerjs.models.Rectangle(80, 80);
