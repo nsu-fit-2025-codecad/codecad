@@ -39,7 +39,7 @@ export const ModelsPane = ({
   };
 
   return (
-    <Card className={cn(className, 'flex flex-col overflow-hidden')}>
+    <Card className={cn('flex h-full flex-col overflow-hidden', className)}>
       <CardHeader className="gap-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Models</CardTitle>
@@ -53,7 +53,7 @@ export const ModelsPane = ({
           </Button>
         </div>
       </CardHeader>
-      <ScrollArea className="w-full">
+      <ScrollArea className="min-h-0 w-full flex-1">
         <CardContent>
           <ItemGroup className="gap-2">
             {models.map((model) => {

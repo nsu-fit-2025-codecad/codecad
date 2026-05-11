@@ -608,6 +608,27 @@ export const HomePage = () => {
         onExecuteCode={evalInput}
         onCodeChange={handleCodeChange}
         onAutorunChange={handleAutorunChange}
+        modelsPane={
+          isModelsPaneOpen ? (
+            <ModelsPane
+              className="rounded-none border-y-0 border-l-0"
+              onClose={closeModelsPane}
+              onSelectModel={handleSelectModel}
+              onClearSelectedModel={handleClearSelectedModel}
+            />
+          ) : null
+        }
+        parametersPane={
+          isParametersPaneOpen ? (
+            <ParametersPane
+              className="rounded-none border-y-0 border-r-0"
+              onClose={closeParametersPane}
+              onParameterValueChange={handleParameterValueChange}
+              onBeforeParameterCommit={flushPendingCodeSnapshot}
+              onParameterCommit={handleParameterCommit}
+            />
+          ) : null
+        }
       />
       <Toolbar
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
@@ -679,23 +700,6 @@ export const HomePage = () => {
           onClose={closeDemoPane}
           onLoadScene={handleLoadDemoScene}
           onPrepareNestingPreset={applyDemoNestingPreset}
-        />
-      )}
-      {isModelsPaneOpen && (
-        <ModelsPane
-          className="fixed left-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
-          onClose={closeModelsPane}
-          onSelectModel={handleSelectModel}
-          onClearSelectedModel={handleClearSelectedModel}
-        />
-      )}
-      {isParametersPaneOpen && (
-        <ParametersPane
-          className="fixed right-4 top-4 z-10 h-[calc(100vh-2rem)] w-80"
-          onClose={closeParametersPane}
-          onParameterValueChange={handleParameterValueChange}
-          onBeforeParameterCommit={flushPendingCodeSnapshot}
-          onParameterCommit={handleParameterCommit}
         />
       )}
     </div>
