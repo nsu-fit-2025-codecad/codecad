@@ -20,6 +20,9 @@ interface ModelsPaneProps {
   className?: string;
 }
 
+const formatNumber = (value: number) =>
+  Number.isInteger(value) ? String(value) : value.toFixed(2);
+
 export const ModelsPane = ({
   onClose,
   onSelectModel,
@@ -79,8 +82,37 @@ export const ModelsPane = ({
                       {model.id}
                     </ItemTitle>
                   </ItemHeader>
-                  <ItemContent>
-                    Width: {model.width} Height: {model.height}
+                  <ItemContent className="space-y-2">
+                    <div>
+                      Width: {formatNumber(model.width)} Height:{' '}
+                      {formatNumber(model.height)}
+                    </div>
+                    {model.diagnostics && (
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <div>
+                          Layers: {model.diagnostics.layers.join(', ')} · Area:{' '}
+                          {model.diagnostics.bounds
+                            ? formatNumber(model.diagnostics.bounds.area)
+                            : 'n/a'}
+                        </div>
+                        <div>
+                          Contours: {model.diagnostics.contourCount} ·{' '}
+                          {model.diagnostics.canNest
+                            ? 'Nesting ready'
+                            : 'Cannot nest'}
+                        </div>
+                        {model.diagnostics.warnings.map((warning) => (
+                          <div key={warning} className="text-amber-600">
+                            {warning}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isSelected && (
+                      <div className="text-xs font-medium text-primary">
+                        Selected target
+                      </div>
+                    )}
                   </ItemContent>
                 </Item>
               );

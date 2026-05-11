@@ -1,9 +1,12 @@
 import { create } from 'zustand';
+import type { ModelDiagnostics } from '@/lib/model-diagnostics';
 
 export interface Model {
   id: string;
   width: number;
   height: number;
+  area?: number;
+  diagnostics?: ModelDiagnostics;
   fit?: boolean;
 }
 
