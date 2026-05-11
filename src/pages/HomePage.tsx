@@ -24,6 +24,7 @@ import { NestingStatus } from '@/components/nesting-status';
 import { useNestingController } from '@/lib/nesting/controller/use-nesting-controller';
 import { renderModelToSvg } from '@/lib/svg-render';
 import { MvpDemoPanel } from '@/components/mvp-demo-panel';
+import { ProjectLibraryDialog } from '@/components/project-library-dialog';
 import {
   getMvpDemoNestingPreset,
   getMvpDemoScene,
@@ -66,10 +67,53 @@ import {
   DEFAULT_EDITOR_SNIPPET_ID,
   getCadSnippetParameters,
 } from '@/lib/cad/snippets';
+import {
+  createLocalProjectRecord,
+  deleteLocalProject,
+  duplicateLocalProject,
+  parseLocalProjectFile,
+  readLocalProjects,
+  renameLocalProject,
+  serializeLocalProject,
+  updateLocalProjectState,
+  upsertLocalProject,
+  writeLocalProjects,
+  type LocalProjectRecord,
+} from '@/lib/project-library/local-projects';
 import { cn } from '@/lib/utils';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
 const CODE_HISTORY_CAPTURE_DELAY_MS = 600;
+
+const downloadTextFile = ({
+  content,
+  filename,
+  type,
+}: {
+  content: string;
+  filename: string;
+  type: string;
+}) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const toProjectFilename = (name: string) =>
+  `${
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'codecad-project'
+  }.codecad.json`;
 
 interface ResolveDisplayedSvgInput {
   committedSvg: string;
@@ -92,10 +136,14 @@ export const HomePage = () => {
   const [activeDemoSceneId, setActiveDemoSceneId] =
     useState<MvpDemoSceneId | null>(null);
   const [isExportDxfDialogOpen, setIsExportDxfDialogOpen] = useState(false);
+  const [isProjectLibraryOpen, setIsProjectLibraryOpen] = useState(false);
   const [nestingExportContext, setNestingExportContext] =
     useState<NestingExportContext | null>(null);
   const [lastNestingReport, setLastNestingReport] =
     useState<NestingRunReport | null>(null);
+  const [localProjects, setLocalProjects] = useState<LocalProjectRecord[]>(() =>
+    readLocalProjects()
+  );
   const [editorError, setEditorError] = useState<EditorEvaluationError | null>(
     null
   );
@@ -230,6 +278,11 @@ export const HomePage = () => {
     },
     [updateProjectHistoryAvailability]
   );
+
+  const persistLocalProjects = useCallback((projects: LocalProjectRecord[]) => {
+    setLocalProjects(projects);
+    writeLocalProjects(projects);
+  }, []);
 
   const commitCurrentProjectSnapshot = useCallback(
     (overrides: Partial<ProjectStateInput> = {}) =>
@@ -384,6 +437,120 @@ export const HomePage = () => {
       setTrackedNestingOptions,
       updateProjectHistoryAvailability,
     ]
+  );
+
+  const saveCurrentProjectAs = useCallback(
+    (name: string) => {
+      flushPendingCodeSnapshot();
+      const project = createLocalProjectRecord({
+        name,
+        state: createCurrentProjectSnapshot(),
+      });
+
+      persistLocalProjects(upsertLocalProject(localProjects, project));
+      toast.success(`Saved "${project.name}"`);
+    },
+    [
+      createCurrentProjectSnapshot,
+      flushPendingCodeSnapshot,
+      localProjects,
+      persistLocalProjects,
+    ]
+  );
+
+  const overwriteLocalProject = useCallback(
+    (project: LocalProjectRecord) => {
+      flushPendingCodeSnapshot();
+      persistLocalProjects(
+        updateLocalProjectState({
+          projects: localProjects,
+          projectId: project.id,
+          state: createCurrentProjectSnapshot(),
+        })
+      );
+      toast.success(`Saved "${project.name}"`);
+    },
+    [
+      createCurrentProjectSnapshot,
+      flushPendingCodeSnapshot,
+      localProjects,
+      persistLocalProjects,
+    ]
+  );
+
+  const loadLocalProject = useCallback(
+    (project: LocalProjectRecord) => {
+      flushPendingCodeSnapshot();
+      applyHistorySnapshot(project.state);
+      pushProjectSnapshot(project.state);
+      setIsProjectLibraryOpen(false);
+      toast.success(`Loaded "${project.name}"`);
+    },
+    [applyHistorySnapshot, flushPendingCodeSnapshot, pushProjectSnapshot]
+  );
+
+  const duplicateProject = useCallback(
+    (project: LocalProjectRecord) => {
+      const duplicate = duplicateLocalProject({ project });
+
+      persistLocalProjects(upsertLocalProject(localProjects, duplicate));
+      toast.success(`Duplicated "${project.name}"`);
+    },
+    [localProjects, persistLocalProjects]
+  );
+
+  const renameProject = useCallback(
+    (project: LocalProjectRecord, name: string) => {
+      persistLocalProjects(
+        renameLocalProject({
+          projects: localProjects,
+          projectId: project.id,
+          name,
+        })
+      );
+    },
+    [localProjects, persistLocalProjects]
+  );
+
+  const removeProject = useCallback(
+    (project: LocalProjectRecord) => {
+      persistLocalProjects(deleteLocalProject(localProjects, project.id));
+      toast.success(`Deleted "${project.name}"`);
+    },
+    [localProjects, persistLocalProjects]
+  );
+
+  const exportProjectFile = useCallback((project: LocalProjectRecord) => {
+    downloadTextFile({
+      content: serializeLocalProject(project),
+      filename: toProjectFilename(project.name),
+      type: 'application/json',
+    });
+  }, []);
+
+  const importProjectFile = useCallback(
+    (content: string) => {
+      const parsed = parseLocalProjectFile(content);
+
+      if (!parsed) {
+        toast.error('Invalid Code CAD project file');
+        return;
+      }
+
+      const hasConflict = localProjects.some(
+        (project) => project.id === parsed.project.id
+      );
+      const project = hasConflict
+        ? duplicateLocalProject({
+            project: parsed.project,
+            name: `${parsed.project.name} import`,
+          })
+        : parsed.project;
+
+      persistLocalProjects(upsertLocalProject(localProjects, project));
+      toast.success(`Imported "${project.name}"`);
+    },
+    [localProjects, persistLocalProjects]
   );
 
   const undoProject = useCallback(() => {
@@ -784,6 +951,7 @@ export const HomePage = () => {
         onRunNesting={runNesting}
         onCopyShareUrl={copyShareUrl}
         onExportDXF={exportDXF}
+        onOpenProjectLibrary={() => setIsProjectLibraryOpen(true)}
         onUndoProject={undoProject}
         onRedoProject={redoProject}
         onToggleDemoGuide={toggleDemoPane}
@@ -811,6 +979,19 @@ export const HomePage = () => {
         nestingExportContext={nestingExportContext}
         onOpenChange={setIsExportDxfDialogOpen}
         onExport={handleExportDxf}
+      />
+      <ProjectLibraryDialog
+        open={isProjectLibraryOpen}
+        projects={localProjects}
+        onOpenChange={setIsProjectLibraryOpen}
+        onSaveAs={saveCurrentProjectAs}
+        onOverwrite={overwriteLocalProject}
+        onLoad={loadLocalProject}
+        onDuplicate={duplicateProject}
+        onRename={renameProject}
+        onDelete={removeProject}
+        onExport={exportProjectFile}
+        onImport={importProjectFile}
       />
       {isStatusVisible && (
         <NestingStatus
