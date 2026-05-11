@@ -1,4 +1,5 @@
 import makerjs, { IModelMap } from 'makerjs';
+import { createModelDiagnostics } from '@/lib/model-diagnostics';
 
 export const mapModelsToSizes = (models: IModelMap) => {
   return Object.entries(models).flatMap(([modelId, model]) => {
@@ -19,6 +20,7 @@ export const mapModelsToSizes = (models: IModelMap) => {
         height,
         extents,
         area: width * height,
+        diagnostics: createModelDiagnostics(model),
       },
     ];
   });
