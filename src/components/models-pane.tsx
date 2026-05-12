@@ -51,6 +51,7 @@ export const ModelsPane = ({
             size="icon"
             onClick={onClose}
             className="cursor-pointer"
+            aria-label="Collapse Models panel"
           >
             <X />
           </Button>
