@@ -43,6 +43,7 @@ export const ParametersPane = ({
             size="icon"
             onClick={onClose}
             className="cursor-pointer"
+            aria-label="Collapse Parameters panel"
           >
             <X />
           </Button>
