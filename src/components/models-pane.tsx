@@ -89,18 +89,16 @@ export const ModelsPane = ({
                     </div>
                     {model.diagnostics && (
                       <div className="space-y-1 text-xs text-muted-foreground">
-                        <div>
-                          Layers: {model.diagnostics.layers.join(', ')} · Area:{' '}
-                          {model.diagnostics.bounds
-                            ? formatNumber(model.diagnostics.bounds.area)
-                            : 'n/a'}
-                        </div>
-                        <div>
-                          Contours: {model.diagnostics.contourCount} ·{' '}
-                          {model.diagnostics.canNest
-                            ? 'Nesting ready'
-                            : 'Cannot nest'}
-                        </div>
+                        {model.diagnostics.layers.length > 0 && (
+                          <div>
+                            Layers: {model.diagnostics.layers.join(', ')}
+                          </div>
+                        )}
+                        {model.diagnostics.bounds && (
+                          <div>
+                            Area: {formatNumber(model.diagnostics.bounds.area)}
+                          </div>
+                        )}
                         {model.diagnostics.warnings.map((warning) => (
                           <div key={warning} className="text-amber-600">
                             {warning}
@@ -108,9 +106,14 @@ export const ModelsPane = ({
                         ))}
                       </div>
                     )}
-                    {isSelected && (
-                      <div className="text-xs font-medium text-primary">
-                        Selected target
+                    {model.fit === true && (
+                      <div className="text-xs font-medium text-green-600">
+                        Packed
+                      </div>
+                    )}
+                    {model.fit === false && (
+                      <div className="text-xs font-medium text-red-600">
+                        Not fit
                       </div>
                     )}
                   </ItemContent>

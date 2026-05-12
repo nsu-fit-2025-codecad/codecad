@@ -1,17 +1,13 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { usePanesStore } from '@/store/panes-store';
 import {
-  Boxes,
   Download,
-  FileImage,
   FolderOpen,
   Package,
   Redo2,
   Share2,
   Shapes,
-  SlidersHorizontal,
   Undo2,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -19,16 +15,14 @@ import { ThemeToggle } from '@/components/theme-toggle';
 interface ToolbarProps {
   onRunNesting: () => void;
   onCopyShareUrl: () => void;
-  onExportDXF: () => void;
-  onExportSVG: () => void;
+  onExport: () => void;
   onOpenProjectLibrary: () => void;
   onUndoProject: () => void;
   onRedoProject: () => void;
   onToggleDemoGuide: () => void;
   canUndoProject?: boolean;
   canRedoProject?: boolean;
-  canExportDXF?: boolean;
-  canExportSVG?: boolean;
+  canExport?: boolean;
   isNesting?: boolean;
   isDemoGuideOpen?: boolean;
   className?: string;
@@ -37,29 +31,20 @@ interface ToolbarProps {
 export const Toolbar = ({
   onRunNesting,
   onCopyShareUrl,
-  onExportDXF,
-  onExportSVG,
+  onExport,
   onOpenProjectLibrary,
   onUndoProject,
   onRedoProject,
   onToggleDemoGuide,
   canUndoProject = false,
   canRedoProject = false,
-  canExportDXF = false,
-  canExportSVG = false,
+  canExport = false,
   isNesting = false,
   isDemoGuideOpen = false,
   className,
 }: ToolbarProps) => {
-  const {
-    toggleModelsPane,
-    toggleParametersPane,
-    isModelsPaneOpen,
-    isParametersPaneOpen,
-  } = usePanesStore();
-
   return (
-    <Card className={cn(className)}>
+    <Card className={cn('rounded-2xl bg-card/95 shadow-lg', className)}>
       <CardContent className="p-2 flex items-center gap-2">
         <Button
           variant="outline"
@@ -84,28 +69,6 @@ export const Toolbar = ({
           <Redo2 />
         </Button>
         <Button
-          variant={isModelsPaneOpen ? 'default' : 'outline'}
-          onClick={toggleModelsPane}
-          className="cursor-pointer"
-          size="icon"
-          title={isModelsPaneOpen ? 'Close Models pane' : 'Open Models pane'}
-        >
-          <Boxes />
-        </Button>
-        <Button
-          variant={isParametersPaneOpen ? 'default' : 'outline'}
-          onClick={toggleParametersPane}
-          className="cursor-pointer"
-          size="icon"
-          title={
-            isParametersPaneOpen
-              ? 'Close Parameters pane'
-              : 'Open Parameters pane'
-          }
-        >
-          <SlidersHorizontal />
-        </Button>
-        <Button
           variant="outline"
           onClick={onRunNesting}
           className="cursor-pointer"
@@ -117,25 +80,14 @@ export const Toolbar = ({
         </Button>
         <Button
           variant="outline"
-          onClick={onExportDXF}
+          onClick={onExport}
           className="cursor-pointer"
           size="icon"
-          title="Export DXF"
-          aria-label="Export DXF"
-          disabled={!canExportDXF || isNesting}
+          title="Export"
+          aria-label="Export"
+          disabled={!canExport || isNesting}
         >
           <Download />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onExportSVG}
-          className="cursor-pointer"
-          size="icon"
-          title="Export SVG"
-          aria-label="Export SVG"
-          disabled={!canExportSVG || isNesting}
-        >
-          <FileImage />
         </Button>
         <Button
           variant="outline"
