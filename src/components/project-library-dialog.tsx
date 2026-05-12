@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -63,10 +64,17 @@ export const ProjectLibraryDialog = ({
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<
     string | null
   >(null);
+  const [pendingOverwriteProjectId, setPendingOverwriteProjectId] = useState<
+    string | null
+  >(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingOverwriteProject =
+    projects.find((project) => project.id === pendingOverwriteProjectId) ??
+    null;
 
   const startRename = (project: LocalProjectRecord) => {
     setPendingDeleteProjectId(null);
+    setPendingOverwriteProjectId(null);
     setRenamingProjectId(project.id);
     setRenameValue(project.name);
   };
@@ -143,115 +151,118 @@ export const ProjectLibraryDialog = ({
                 key={project.id}
                 className="space-y-3 rounded-md border bg-background p-3"
               >
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <div className="min-w-0 space-y-1">
-                    {renamingProjectId === project.id ? (
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input
-                          value={renameValue}
-                          onChange={(event) =>
-                            setRenameValue(event.target.value)
+                <div className="min-w-0 space-y-1">
+                  {renamingProjectId === project.id ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        aria-label={`Rename ${project.name}`}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            commitRename(project);
                           }
-                          aria-label={`Rename ${project.name}`}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              commitRename(project);
-                            }
-                            if (event.key === 'Escape') {
-                              setRenamingProjectId(null);
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => commitRename(project)}
-                          disabled={!renameValue.trim()}
-                        >
-                          Apply
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setRenamingProjectId(null)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate font-medium">{project.name}</p>
-                        {project.id === currentProjectId && (
-                          <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                            Current
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Updated {formatDate(project.updatedAt)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onLoad(project)}
-                    >
-                      <FolderOpen className="size-4" />
-                      Load
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onOverwrite(project)}
-                    >
-                      <Save className="size-4" />
-                      Update this saved project
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onDuplicate(project)}
-                    >
-                      <Copy className="size-4" />
-                      Duplicate
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startRename(project)}
-                    >
-                      <Pencil className="size-4" />
-                      Rename
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onExport(project)}
-                    >
-                      <Download className="size-4" />
-                      Export
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setRenamingProjectId(null);
-                        setPendingDeleteProjectId(project.id);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      Delete
-                    </Button>
-                  </div>
+                          if (event.key === 'Escape') {
+                            setRenamingProjectId(null);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => commitRename(project)}
+                        disabled={!renameValue.trim()}
+                      >
+                        Apply
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setRenamingProjectId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="min-w-0 truncate font-medium">
+                        {project.name}
+                      </p>
+                      {project.id === currentProjectId && (
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Updated {formatDate(project.updatedAt)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onLoad(project)}
+                  >
+                    <FolderOpen className="size-4" />
+                    Load
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRenamingProjectId(null);
+                      setPendingDeleteProjectId(null);
+                      setPendingOverwriteProjectId(project.id);
+                    }}
+                  >
+                    <Save className="size-4" />
+                    Overwrite
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onDuplicate(project)}
+                  >
+                    <Copy className="size-4" />
+                    Duplicate
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startRename(project)}
+                  >
+                    <Pencil className="size-4" />
+                    Rename
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onExport(project)}
+                  >
+                    <Download className="size-4" />
+                    Export
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRenamingProjectId(null);
+                      setPendingOverwriteProjectId(null);
+                      setPendingDeleteProjectId(project.id);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete
+                  </Button>
                 </div>
                 {pendingDeleteProjectId === project.id && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
@@ -288,6 +299,46 @@ export const ProjectLibraryDialog = ({
           </div>
         </ScrollArea>
       </DialogContent>
+
+      <Dialog
+        open={pendingOverwriteProject !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setPendingOverwriteProjectId(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Overwrite saved project?</DialogTitle>
+            <DialogDescription>
+              This will replace {pendingOverwriteProject?.name} with the project
+              currently open in the editor.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingOverwriteProjectId(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (pendingOverwriteProject) {
+                  onOverwrite(pendingOverwriteProject);
+                }
+                setPendingOverwriteProjectId(null);
+              }}
+            >
+              Overwrite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

@@ -41,8 +41,8 @@ export interface CadExample {
   nestingPresetIds: MvpDemoNestingPresetId[];
 }
 
-// Add new user-facing snippet/example groups here. This registry is also the
-// dev-facing plugin API that drives the Examples browser and Monaco completions.
+// Add new built-in example/demo groups here. User-defined editor snippets are a
+// separate future feature and should not be modeled as content plugins.
 export const CAD_CONTENT_PLUGINS: readonly CadContentPlugin[] = [
   {
     id: 'core-primitives',
