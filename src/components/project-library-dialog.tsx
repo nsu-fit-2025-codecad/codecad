@@ -23,6 +23,7 @@ import type { LocalProjectRecord } from '@/lib/project-library/local-projects';
 interface ProjectLibraryDialogProps {
   open: boolean;
   projects: LocalProjectRecord[];
+  currentProjectId: string | null;
   onOpenChange: (open: boolean) => void;
   onSaveAs: (name: string) => void;
   onOverwrite: (project: LocalProjectRecord) => void;
@@ -43,6 +44,7 @@ const formatDate = (isoDate: string) =>
 export const ProjectLibraryDialog = ({
   open,
   projects,
+  currentProjectId,
   onOpenChange,
   onSaveAs,
   onOverwrite,
@@ -54,7 +56,31 @@ export const ProjectLibraryDialog = ({
   onImport,
 }: ProjectLibraryDialogProps) => {
   const [name, setName] = useState('Untitled project');
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(
+    null
+  );
+  const [renameValue, setRenameValue] = useState('');
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<
+    string | null
+  >(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const startRename = (project: LocalProjectRecord) => {
+    setPendingDeleteProjectId(null);
+    setRenamingProjectId(project.id);
+    setRenameValue(project.name);
+  };
+
+  const commitRename = (project: LocalProjectRecord) => {
+    const nextName = renameValue.trim();
+
+    if (!nextName) {
+      return;
+    }
+
+    onRename(project, nextName);
+    setRenamingProjectId(null);
+  };
 
   const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -73,7 +99,8 @@ export const ProjectLibraryDialog = ({
         <DialogHeader>
           <DialogTitle>Project Library</DialogTitle>
           <DialogDescription>
-            Save, restore, import, and export local Code CAD projects.
+            Save the current workspace as a new slot, or explicitly update an
+            existing saved project.
           </DialogDescription>
         </DialogHeader>
 
@@ -85,7 +112,7 @@ export const ProjectLibraryDialog = ({
           />
           <Button type="button" onClick={() => onSaveAs(name)}>
             <Save className="size-4" />
-            Save as new
+            Save current as new
           </Button>
           <Button
             type="button"
@@ -114,83 +141,148 @@ export const ProjectLibraryDialog = ({
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="grid gap-3 rounded-md border bg-background p-3 sm:grid-cols-[1fr_auto]"
+                className="space-y-3 rounded-md border bg-background p-3"
               >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{project.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Updated {formatDate(project.updatedAt)}
-                  </p>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <div className="min-w-0 space-y-1">
+                    {renamingProjectId === project.id ? (
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          value={renameValue}
+                          onChange={(event) =>
+                            setRenameValue(event.target.value)
+                          }
+                          aria-label={`Rename ${project.name}`}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              commitRename(project);
+                            }
+                            if (event.key === 'Escape') {
+                              setRenamingProjectId(null);
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => commitRename(project)}
+                          disabled={!renameValue.trim()}
+                        >
+                          Apply
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRenamingProjectId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-medium">{project.name}</p>
+                        {project.id === currentProjectId && (
+                          <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Updated {formatDate(project.updatedAt)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onLoad(project)}
+                    >
+                      <FolderOpen className="size-4" />
+                      Load
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onOverwrite(project)}
+                    >
+                      <Save className="size-4" />
+                      Update this saved project
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onDuplicate(project)}
+                    >
+                      <Copy className="size-4" />
+                      Duplicate
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => startRename(project)}
+                    >
+                      <Pencil className="size-4" />
+                      Rename
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onExport(project)}
+                    >
+                      <Download className="size-4" />
+                      Export
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setRenamingProjectId(null);
+                        setPendingDeleteProjectId(project.id);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onLoad(project)}
-                  >
-                    <FolderOpen className="size-4" />
-                    Load
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onOverwrite(project)}
-                  >
-                    <Save className="size-4" />
-                    Save
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onDuplicate(project)}
-                  >
-                    <Copy className="size-4" />
-                    Duplicate
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const nextName = window.prompt(
-                        'Project name',
-                        project.name
-                      );
-
-                      if (nextName !== null) {
-                        onRename(project, nextName);
-                      }
-                    }}
-                  >
-                    <Pencil className="size-4" />
-                    Rename
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onExport(project)}
-                  >
-                    <Download className="size-4" />
-                    Export
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (window.confirm(`Delete "${project.name}"?`)) {
-                        onDelete(project);
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                    Delete
-                  </Button>
-                </div>
+                {pendingDeleteProjectId === project.id && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                    <p className="font-medium">Delete {project.name}?</p>
+                    <p className="mt-1 text-muted-foreground">
+                      This removes the saved slot from local storage. The
+                      currently open workspace is not changed.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          onDelete(project);
+                          setPendingDeleteProjectId(null);
+                        }}
+                      >
+                        Delete project
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPendingDeleteProjectId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

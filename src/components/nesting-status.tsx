@@ -2,7 +2,7 @@ import type { NestingProgress, NestingRunStats } from '@/lib/nesting';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ClipboardCopy, RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 
 interface NestingStatusProps {
   isRunning: boolean;
@@ -11,7 +11,6 @@ interface NestingStatusProps {
   error: string | null;
   className?: string;
   onCancel?: () => void;
-  onCopyReport?: () => void;
   onRepeatLastRun?: () => void;
   onDismiss?: () => void;
 }
@@ -36,7 +35,6 @@ export const NestingStatus = ({
   error,
   className,
   onCancel,
-  onCopyReport,
   onRepeatLastRun,
   onDismiss,
 }: NestingStatusProps) => {
@@ -149,26 +147,16 @@ export const NestingStatus = ({
           </Button>
         )}
         {!isRunning && stats && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onRepeatLastRun}
               disabled={!onRepeatLastRun}
-              className="cursor-pointer"
+              className="w-full cursor-pointer"
             >
               <RefreshCw className="size-4" />
-              Repeat
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onCopyReport}
-              disabled={!onCopyReport}
-              className="cursor-pointer"
-            >
-              <ClipboardCopy className="size-4" />
-              Copy report
+              Repeat last run
             </Button>
           </div>
         )}

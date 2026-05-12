@@ -138,7 +138,7 @@ export const HomePage = () => {
   const [model, setModel] = useState<IModel | null>(null);
   const [activeDemoSceneId, setActiveDemoSceneId] =
     useState<MvpDemoSceneId | null>(null);
-  const [isExportDxfDialogOpen, setIsExportDxfDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isProjectLibraryOpen, setIsProjectLibraryOpen] = useState(false);
   const [nestingExportContext, setNestingExportContext] =
     useState<NestingExportContext | null>(null);
@@ -147,6 +147,9 @@ export const HomePage = () => {
   const [localProjects, setLocalProjects] = useState<LocalProjectRecord[]>(() =>
     readLocalProjects()
   );
+  const [activeLocalProjectId, setActiveLocalProjectId] = useState<
+    string | null
+  >(null);
   const [editorError, setEditorError] = useState<EditorEvaluationError | null>(
     null
   );
@@ -200,6 +203,7 @@ export const HomePage = () => {
     closeModelsPane,
     closeParametersPane,
     closeDemoPane,
+    openModelsPane,
     openParametersPane,
     toggleDemoPane,
   } = usePanesStore();
@@ -363,26 +367,30 @@ export const HomePage = () => {
   );
 
   const exportDXF = () => {
-    setIsExportDxfDialogOpen(true);
+    setIsExportDialogOpen(true);
   };
 
-  const exportSVG = useCallback(() => {
-    try {
-      const result = createSvgExport({ svgString: svg });
+  const handleExportSvg = useCallback(
+    (filenamePrefix: string) => {
+      try {
+        const result = createSvgExport({ svgString: svg, filenamePrefix });
 
-      downloadTextFile({
-        content: result.svg,
-        filename: result.filename,
-        type: 'image/svg+xml',
-      });
-      toast.success('SVG exported');
-    } catch (nextError) {
-      console.error('SVG export error:', nextError);
-      toast.error(
-        nextError instanceof Error ? nextError.message : 'SVG export failed'
-      );
-    }
-  }, [svg]);
+        downloadTextFile({
+          content: result.svg,
+          filename: result.filename,
+          type: 'image/svg+xml',
+        });
+        setIsExportDialogOpen(false);
+        toast.success('SVG exported');
+      } catch (nextError) {
+        console.error('SVG export error:', nextError);
+        toast.error(
+          nextError instanceof Error ? nextError.message : 'SVG export failed'
+        );
+      }
+    },
+    [svg]
+  );
 
   const handleExportDxf = useCallback((request: DxfExportRequest) => {
     try {
@@ -400,7 +408,7 @@ export const HomePage = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      setIsExportDxfDialogOpen(false);
+      setIsExportDialogOpen(false);
       toast.success(
         `DXF exported (${result.validation.selectedCount} model${
           result.validation.selectedCount === 1 ? '' : 's'
@@ -469,6 +477,7 @@ export const HomePage = () => {
       });
 
       persistLocalProjects(upsertLocalProject(localProjects, project));
+      setActiveLocalProjectId(project.id);
       toast.success(`Saved "${project.name}"`);
     },
     [
@@ -489,6 +498,7 @@ export const HomePage = () => {
           state: createCurrentProjectSnapshot(),
         })
       );
+      setActiveLocalProjectId(project.id);
       toast.success(`Saved "${project.name}"`);
     },
     [
@@ -504,6 +514,7 @@ export const HomePage = () => {
       flushPendingCodeSnapshot();
       applyHistorySnapshot(project.state);
       pushProjectSnapshot(project.state);
+      setActiveLocalProjectId(project.id);
       setIsProjectLibraryOpen(false);
       toast.success(`Loaded "${project.name}"`);
     },
@@ -536,9 +547,12 @@ export const HomePage = () => {
   const removeProject = useCallback(
     (project: LocalProjectRecord) => {
       persistLocalProjects(deleteLocalProject(localProjects, project.id));
+      if (activeLocalProjectId === project.id) {
+        setActiveLocalProjectId(null);
+      }
       toast.success(`Deleted "${project.name}"`);
     },
-    [localProjects, persistLocalProjects]
+    [activeLocalProjectId, localProjects, persistLocalProjects]
   );
 
   const exportProjectFile = useCallback((project: LocalProjectRecord) => {
@@ -950,20 +964,6 @@ export const HomePage = () => {
     );
   }, [isRunning, lastNestingReport, runTrackedNesting]);
 
-  const copyLastNestingReport = useCallback(async () => {
-    if (!lastNestingReport) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(lastNestingReport.text);
-      toast.success('Nesting report copied');
-    } catch (nextError) {
-      console.error('Failed to copy nesting report:', nextError);
-      toast.error('Could not copy nesting report');
-    }
-  }, [lastNestingReport]);
-
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
       <WorkbenchLayout
@@ -976,42 +976,40 @@ export const HomePage = () => {
         onExecuteCode={evalInput}
         onCodeChange={handleCodeChange}
         onAutorunChange={handleAutorunChange}
+        isModelsPaneOpen={isModelsPaneOpen}
+        isParametersPaneOpen={isParametersPaneOpen}
+        onOpenModelsPane={openModelsPane}
+        onOpenParametersPane={openParametersPane}
         modelsPane={
-          isModelsPaneOpen ? (
-            <ModelsPane
-              className="rounded-none border-y-0 border-l-0"
-              onClose={closeModelsPane}
-              onSelectModel={handleSelectModel}
-              onClearSelectedModel={handleClearSelectedModel}
-            />
-          ) : null
+          <ModelsPane
+            className="rounded-2xl border-border/70 bg-card/95 shadow-sm"
+            onClose={closeModelsPane}
+            onSelectModel={handleSelectModel}
+            onClearSelectedModel={handleClearSelectedModel}
+          />
         }
         parametersPane={
-          isParametersPaneOpen ? (
-            <ParametersPane
-              className="rounded-none border-y-0 border-r-0"
-              onClose={closeParametersPane}
-              onParameterValueChange={handleParameterValueChange}
-              onBeforeParameterCommit={flushPendingCodeSnapshot}
-              onParameterCommit={handleParameterCommit}
-            />
-          ) : null
+          <ParametersPane
+            className="rounded-2xl border-border/70 bg-card/95 shadow-sm"
+            onClose={closeParametersPane}
+            onParameterValueChange={handleParameterValueChange}
+            onBeforeParameterCommit={flushPendingCodeSnapshot}
+            onParameterCommit={handleParameterCommit}
+          />
         }
       />
       <Toolbar
         className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2"
         onRunNesting={runNesting}
         onCopyShareUrl={copyShareUrl}
-        onExportDXF={exportDXF}
-        onExportSVG={exportSVG}
+        onExport={exportDXF}
         onOpenProjectLibrary={() => setIsProjectLibraryOpen(true)}
         onUndoProject={undoProject}
         onRedoProject={redoProject}
         onToggleDemoGuide={toggleDemoPane}
         canUndoProject={historyAvailability.canUndo}
         canRedoProject={historyAvailability.canRedo}
-        canExportDXF={model !== null}
-        canExportSVG={svg.trim().length > 0}
+        canExport={model !== null || svg.trim().length > 0}
         isNesting={isRunning}
         isDemoGuideOpen={isDemoPaneOpen}
       />
@@ -1025,18 +1023,21 @@ export const HomePage = () => {
         onConfirm={runTrackedNesting}
       />
       <ExportDxfDialog
-        open={isExportDxfDialogOpen}
+        open={isExportDialogOpen}
         model={model}
         models={availableModels}
         selectedModelId={selectedModelId}
+        svgString={svg}
         currentModelRevision={getModelRevision()}
         nestingExportContext={nestingExportContext}
-        onOpenChange={setIsExportDxfDialogOpen}
-        onExport={handleExportDxf}
+        onOpenChange={setIsExportDialogOpen}
+        onExportDxf={handleExportDxf}
+        onExportSvg={handleExportSvg}
       />
       <ProjectLibraryDialog
         open={isProjectLibraryOpen}
         projects={localProjects}
+        currentProjectId={activeLocalProjectId}
         onOpenChange={setIsProjectLibraryOpen}
         onSaveAs={saveCurrentProjectAs}
         onOverwrite={overwriteLocalProject}
@@ -1055,7 +1056,6 @@ export const HomePage = () => {
           stats={stats}
           error={error}
           onCancel={cancelNestingRun}
-          onCopyReport={lastNestingReport ? copyLastNestingReport : undefined}
           onRepeatLastRun={lastNestingReport ? repeatLastNestingRun : undefined}
           onDismiss={dismissNestingStatus}
         />
