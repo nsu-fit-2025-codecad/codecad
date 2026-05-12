@@ -1,4 +1,4 @@
-import React, { type ReactNode, useEffect, useState } from 'react';
+import React, { type ReactNode, useEffect, useRef, useState } from 'react';
 import { CodeEditor } from '@/components/code-editor';
 import { VisualizationArea } from '@/components/visualization-area';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,12 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
+import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import {
-  Boxes,
-  PanelLeftOpen,
-  PanelRightOpen,
-  SlidersHorizontal,
-} from 'lucide-react';
-import { useDefaultLayout } from 'react-resizable-panels';
+  type PanelImperativeHandle,
+  type PanelSize,
+  useDefaultLayout,
+} from 'react-resizable-panels';
 
 interface WorkbenchLayoutProps {
   svgString: string;
@@ -33,12 +32,11 @@ interface WorkbenchLayoutProps {
 
 interface PaneRailProps {
   label: string;
-  side: 'left' | 'right';
   onOpen: () => void;
   icon: ReactNode;
 }
 
-const PaneRail = ({ label, side, onOpen, icon }: PaneRailProps) => (
+const PaneRail = ({ label, onOpen, icon }: PaneRailProps) => (
   <div className="flex h-full w-full items-center justify-center rounded-2xl border border-border/70 bg-card/95 shadow-sm">
     <Button
       type="button"
@@ -49,14 +47,7 @@ const PaneRail = ({ label, side, onOpen, icon }: PaneRailProps) => (
       title={`Open ${label}`}
       aria-label={`Open ${label}`}
     >
-      <span className="relative">
-        {icon}
-        {side === 'left' ? (
-          <PanelLeftOpen className="absolute -right-2 -bottom-2 size-3 rounded-full bg-card" />
-        ) : (
-          <PanelRightOpen className="absolute -right-2 -bottom-2 size-3 rounded-full bg-card" />
-        )}
-      </span>
+      {icon}
     </Button>
   </div>
 );
@@ -75,6 +66,10 @@ export const WorkbenchLayout = ({
   onOpenParametersPane,
   className,
 }: WorkbenchLayoutProps) => {
+  const parametersPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const modelsPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const parametersReadyForDragOpenRef = useRef(false);
+  const modelsReadyForDragOpenRef = useRef(false);
   const [isDesktopLayout, setIsDesktopLayout] = useState<boolean>(
     () => window.matchMedia('(min-width: 1024px)').matches
   );
@@ -161,8 +156,76 @@ export const WorkbenchLayout = ({
   );
 
   const closedSideSize = isDesktopLayout ? '4%' : '8%';
+  const closedSidePercent = isDesktopLayout ? 4 : 8;
   const openParametersSize = isDesktopLayout ? '18%' : '24%';
   const openModelsSize = isDesktopLayout ? '18%' : '22%';
+  const parametersMaxSize = isDesktopLayout ? '34%' : '40%';
+  const modelsMaxSize = isDesktopLayout ? '34%' : '35%';
+
+  useEffect(() => {
+    const panel = parametersPanelRef.current;
+
+    if (!panel) {
+      return;
+    }
+
+    if (isParametersPaneOpen) {
+      panel.expand();
+      return;
+    }
+
+    panel.collapse();
+    const timeoutId = window.setTimeout(() => {
+      panel.resize(closedSideSize);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [closedSideSize, isParametersPaneOpen]);
+
+  useEffect(() => {
+    const panel = modelsPanelRef.current;
+
+    if (!panel) {
+      return;
+    }
+
+    if (isModelsPaneOpen) {
+      panel.expand();
+      return;
+    }
+
+    panel.collapse();
+    const timeoutId = window.setTimeout(() => {
+      panel.resize(closedSideSize);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [closedSideSize, isModelsPaneOpen]);
+
+  const openCollapsedPanelOnResize = (
+    isOpen: boolean,
+    onOpen: () => void,
+    panelSize: PanelSize,
+    readyForDragOpenRef: React.MutableRefObject<boolean>
+  ) => {
+    if (isOpen) {
+      readyForDragOpenRef.current = false;
+      return;
+    }
+
+    if (panelSize.asPercentage <= closedSidePercent + 0.25) {
+      readyForDragOpenRef.current = true;
+      return;
+    }
+
+    if (
+      !isOpen &&
+      readyForDragOpenRef.current &&
+      panelSize.asPercentage > closedSidePercent + 1
+    ) {
+      onOpen();
+    }
+  };
 
   return (
     <div className={cn('h-full w-full bg-[#101113] p-3', className)}>
@@ -176,22 +239,21 @@ export const WorkbenchLayout = ({
       >
         <ResizablePanel
           id="parameters-panel"
+          panelRef={parametersPanelRef}
           defaultSize={
             isParametersPaneOpen ? openParametersSize : closedSideSize
           }
-          minSize={
-            isParametersPaneOpen
-              ? isDesktopLayout
-                ? '14%'
-                : '18%'
-              : closedSideSize
-          }
-          maxSize={
-            isParametersPaneOpen
-              ? isDesktopLayout
-                ? '34%'
-                : '40%'
-              : closedSideSize
+          minSize={closedSideSize}
+          maxSize={parametersMaxSize}
+          collapsible
+          collapsedSize={closedSideSize}
+          onResize={(panelSize) =>
+            openCollapsedPanelOnResize(
+              isParametersPaneOpen,
+              onOpenParametersPane,
+              panelSize,
+              parametersReadyForDragOpenRef
+            )
           }
           className="min-h-0 min-w-0"
         >
@@ -200,9 +262,8 @@ export const WorkbenchLayout = ({
           ) : (
             <PaneRail
               label="Parameters"
-              side="left"
               onOpen={onOpenParametersPane}
-              icon={<SlidersHorizontal className="size-5" />}
+              icon={<PanelLeftOpen className="size-5" />}
             />
           )}
         </ResizablePanel>
@@ -226,20 +287,19 @@ export const WorkbenchLayout = ({
         />
         <ResizablePanel
           id="models-panel"
+          panelRef={modelsPanelRef}
           defaultSize={isModelsPaneOpen ? openModelsSize : closedSideSize}
-          minSize={
-            isModelsPaneOpen
-              ? isDesktopLayout
-                ? '14%'
-                : '16%'
-              : closedSideSize
-          }
-          maxSize={
-            isModelsPaneOpen
-              ? isDesktopLayout
-                ? '34%'
-                : '35%'
-              : closedSideSize
+          minSize={closedSideSize}
+          maxSize={modelsMaxSize}
+          collapsible
+          collapsedSize={closedSideSize}
+          onResize={(panelSize) =>
+            openCollapsedPanelOnResize(
+              isModelsPaneOpen,
+              onOpenModelsPane,
+              panelSize,
+              modelsReadyForDragOpenRef
+            )
           }
           className="min-h-0 min-w-0"
         >
@@ -248,9 +308,8 @@ export const WorkbenchLayout = ({
           ) : (
             <PaneRail
               label="Models"
-              side="right"
               onOpen={onOpenModelsPane}
-              icon={<Boxes className="size-5" />}
+              icon={<PanelRightOpen className="size-5" />}
             />
           )}
         </ResizablePanel>
