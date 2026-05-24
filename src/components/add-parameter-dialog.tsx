@@ -20,6 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useParametersStore } from '@/store/store';
 import { useState } from 'react';
 import { RESERVED_RUNTIME_IDENTIFIERS, RESERVED_WORDS } from '@/lib/constants';
+import { Plus } from 'lucide-react';
 
 const addParameterFormSchema = (existingNames: string[]) =>
   z.object({
@@ -93,7 +94,9 @@ export const AddParameterDialog = ({
       }}
     >
       <DialogTrigger asChild>
-        <Button className="flex-1">Add</Button>
+        <Button className="flex-1 max-w-fit cursor-pointer" variant="secondary">
+          <Plus />
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
