@@ -16,8 +16,8 @@ interface PanesState {
 }
 
 export const usePanesStore = create<PanesState>()((set) => ({
-  isModelsPaneOpen: true,
-  isParametersPaneOpen: true,
+  isModelsPaneOpen: false,
+  isParametersPaneOpen: false,
   isDemoPaneOpen: false,
   openModelsPane: () => set({ isModelsPaneOpen: true }),
   openParametersPane: () => set({ isParametersPaneOpen: true }),

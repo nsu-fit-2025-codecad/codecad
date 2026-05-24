@@ -11,7 +11,6 @@ import { cn } from '@/lib/utils';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import {
   type PanelImperativeHandle,
-  type PanelSize,
   useDefaultLayout,
 } from 'react-resizable-panels';
 
@@ -68,8 +67,6 @@ export const WorkbenchLayout = ({
 }: WorkbenchLayoutProps) => {
   const parametersPanelRef = useRef<PanelImperativeHandle | null>(null);
   const modelsPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const parametersReadyForDragOpenRef = useRef(false);
-  const modelsReadyForDragOpenRef = useRef(false);
   const [isDesktopLayout, setIsDesktopLayout] = useState<boolean>(
     () => window.matchMedia('(min-width: 1024px)').matches
   );
@@ -136,10 +133,7 @@ export const WorkbenchLayout = ({
             />
           </div>
         </ResizablePanel>
-        <ResizableHandle
-          withHandle
-          className="bg-border/80 transition-colors hover:bg-border"
-        />
+        <ResizableHandle className="bg-border/80 transition-colors hover:bg-border" />
         <ResizablePanel
           id="visualization-panel"
           defaultSize={isDesktopLayout ? '55%' : '60%'}
@@ -171,7 +165,13 @@ export const WorkbenchLayout = ({
 
     if (isParametersPaneOpen) {
       panel.expand();
-      return;
+      const timeoutId = window.setTimeout(() => {
+        if (panel.getSize().asPercentage <= closedSidePercent + 0.25) {
+          panel.resize(openParametersSize);
+        }
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
 
     panel.collapse();
@@ -180,7 +180,12 @@ export const WorkbenchLayout = ({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [closedSideSize, isParametersPaneOpen]);
+  }, [
+    closedSidePercent,
+    closedSideSize,
+    isParametersPaneOpen,
+    openParametersSize,
+  ]);
 
   useEffect(() => {
     const panel = modelsPanelRef.current;
@@ -191,7 +196,13 @@ export const WorkbenchLayout = ({
 
     if (isModelsPaneOpen) {
       panel.expand();
-      return;
+      const timeoutId = window.setTimeout(() => {
+        if (panel.getSize().asPercentage <= closedSidePercent + 0.25) {
+          panel.resize(openModelsSize);
+        }
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
 
     panel.collapse();
@@ -200,32 +211,7 @@ export const WorkbenchLayout = ({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [closedSideSize, isModelsPaneOpen]);
-
-  const openCollapsedPanelOnResize = (
-    isOpen: boolean,
-    onOpen: () => void,
-    panelSize: PanelSize,
-    readyForDragOpenRef: React.MutableRefObject<boolean>
-  ) => {
-    if (isOpen) {
-      readyForDragOpenRef.current = false;
-      return;
-    }
-
-    if (panelSize.asPercentage <= closedSidePercent + 0.25) {
-      readyForDragOpenRef.current = true;
-      return;
-    }
-
-    if (
-      !isOpen &&
-      readyForDragOpenRef.current &&
-      panelSize.asPercentage > closedSidePercent + 1
-    ) {
-      onOpen();
-    }
-  };
+  }, [closedSidePercent, closedSideSize, isModelsPaneOpen, openModelsSize]);
 
   return (
     <div className={cn('h-full w-full bg-[#101113] p-3', className)}>
@@ -235,7 +221,7 @@ export const WorkbenchLayout = ({
         orientation={isDesktopLayout ? 'horizontal' : 'vertical'}
         defaultLayout={shellDefaultLayout}
         onLayoutChanged={onShellLayoutChanged}
-        className="h-full w-full gap-3"
+        className="h-full w-full gap-1.5"
       >
         <ResizablePanel
           id="parameters-panel"
@@ -247,14 +233,6 @@ export const WorkbenchLayout = ({
           maxSize={parametersMaxSize}
           collapsible
           collapsedSize={closedSideSize}
-          onResize={(panelSize) =>
-            openCollapsedPanelOnResize(
-              isParametersPaneOpen,
-              onOpenParametersPane,
-              panelSize,
-              parametersReadyForDragOpenRef
-            )
-          }
           className="min-h-0 min-w-0"
         >
           {isParametersPaneOpen && parametersPane ? (
@@ -268,8 +246,11 @@ export const WorkbenchLayout = ({
           )}
         </ResizablePanel>
         <ResizableHandle
-          withHandle
-          className="rounded-full bg-transparent transition-colors after:w-2 hover:bg-border/30"
+          disabled={!isParametersPaneOpen}
+          className={cn(
+            'rounded-full bg-transparent transition-colors after:w-2 hover:bg-border/30',
+            !isParametersPaneOpen && 'pointer-events-none opacity-0'
+          )}
         />
         <ResizablePanel
           id="main-workbench-panel"
@@ -282,8 +263,11 @@ export const WorkbenchLayout = ({
           {workbench}
         </ResizablePanel>
         <ResizableHandle
-          withHandle
-          className="rounded-full bg-transparent transition-colors after:w-2 hover:bg-border/30"
+          disabled={!isModelsPaneOpen}
+          className={cn(
+            'rounded-full bg-transparent transition-colors after:w-2 hover:bg-border/30',
+            !isModelsPaneOpen && 'pointer-events-none opacity-0'
+          )}
         />
         <ResizablePanel
           id="models-panel"
@@ -293,14 +277,6 @@ export const WorkbenchLayout = ({
           maxSize={modelsMaxSize}
           collapsible
           collapsedSize={closedSideSize}
-          onResize={(panelSize) =>
-            openCollapsedPanelOnResize(
-              isModelsPaneOpen,
-              onOpenModelsPane,
-              panelSize,
-              modelsReadyForDragOpenRef
-            )
-          }
           className="min-h-0 min-w-0"
         >
           {isModelsPaneOpen && modelsPane ? (
