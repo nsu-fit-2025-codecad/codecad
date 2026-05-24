@@ -1,12 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useModelsStore } from '@/store/models-store';
-import {
-  Item,
-  ItemContent,
-  ItemGroup,
-  ItemHeader,
-  ItemTitle,
-} from '@/components/ui/item';
+import { Item, ItemContent, ItemGroup, ItemTitle } from '@/components/ui/item';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -59,62 +53,66 @@ export const ModelsPane = ({
       </CardHeader>
       <ScrollArea className="min-h-0 w-full flex-1">
         <CardContent>
-          <ItemGroup className="gap-2">
+          <ItemGroup className="gap-1.5">
             {models.map((model) => {
               const isSelected = selectedModelId === model.id;
+              const fitStatus =
+                model.fit === true
+                  ? 'Packed'
+                  : model.fit === false
+                    ? 'Not fit'
+                    : null;
 
               return (
                 <Item
                   key={model.id}
                   onClick={() => toggleModelSelection(model.id)}
                   className={cn(
-                    'cursor-pointer px-3 py-2 border border-border/50 bg-background transition-[background-color,border-color,box-shadow] duration-150',
+                    'cursor-pointer border border-border/50 bg-background px-2.5 py-2 transition-[background-color,border-color,box-shadow] duration-150',
                     isSelected && 'bg-accent border-border shadow-xs',
                     !isSelected && 'hover:bg-accent/20 hover:border-border'
                   )}
                 >
-                  <ItemHeader>
-                    <ItemTitle
-                      className={cn(
-                        model.fit === true && 'text-green-500',
-                        model.fit === false && 'text-red-500'
+                  <ItemContent className="min-w-0 gap-1">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <ItemTitle
+                        className={cn(
+                          'min-w-0 truncate',
+                          model.fit === true && 'text-green-500',
+                          model.fit === false && 'text-red-500'
+                        )}
+                        title={model.id}
+                      >
+                        {model.id}
+                      </ItemTitle>
+                      {fitStatus && (
+                        <span
+                          className={cn(
+                            'shrink-0 text-xs font-medium',
+                            model.fit === true && 'text-green-600',
+                            model.fit === false && 'text-red-600'
+                          )}
+                        >
+                          {fitStatus}
+                        </span>
                       )}
-                    >
-                      {model.id}
-                    </ItemTitle>
-                  </ItemHeader>
-                  <ItemContent className="space-y-2">
-                    <div>
-                      Width: {formatNumber(model.width)} Height:{' '}
-                      {formatNumber(model.height)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatNumber(model.width)} x {formatNumber(model.height)}
+                      {model.diagnostics?.bounds && (
+                        <>
+                          {' · Area '}
+                          {formatNumber(model.diagnostics.bounds.area)}
+                        </>
+                      )}
                     </div>
                     {model.diagnostics && (
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        {model.diagnostics.layers.length > 0 && (
-                          <div>
-                            Layers: {model.diagnostics.layers.join(', ')}
-                          </div>
-                        )}
-                        {model.diagnostics.bounds && (
-                          <div>
-                            Area: {formatNumber(model.diagnostics.bounds.area)}
-                          </div>
-                        )}
+                      <div className="space-y-0.5 text-xs text-muted-foreground">
                         {model.diagnostics.warnings.map((warning) => (
                           <div key={warning} className="text-amber-600">
                             {warning}
                           </div>
                         ))}
-                      </div>
-                    )}
-                    {model.fit === true && (
-                      <div className="text-xs font-medium text-green-600">
-                        Packed
-                      </div>
-                    )}
-                    {model.fit === false && (
-                      <div className="text-xs font-medium text-red-600">
-                        Not fit
                       </div>
                     )}
                   </ItemContent>
