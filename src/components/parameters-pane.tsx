@@ -37,7 +37,13 @@ export const ParametersPane = ({
     <Card className={cn('flex h-full flex-col overflow-hidden', className)}>
       <CardHeader className="gap-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>Parameters</CardTitle>
+          <div className="flex gap-4 items-center">
+            <CardTitle>Parameters</CardTitle>
+            <AddParameterDialog
+              onBeforeCommit={onBeforeParameterCommit}
+              onCommit={onParameterCommit}
+            />
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -47,12 +53,6 @@ export const ParametersPane = ({
           >
             <X />
           </Button>
-        </div>
-        <div className="flex gap-4">
-          <AddParameterDialog
-            onBeforeCommit={onBeforeParameterCommit}
-            onCommit={onParameterCommit}
-          />
         </div>
       </CardHeader>
       <ScrollArea className="min-h-0 w-full flex-1">

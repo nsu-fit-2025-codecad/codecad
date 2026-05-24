@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import type { Parameter } from '@/store/store';
+import { Pencil } from 'lucide-react';
 
 type ParameterControlProps = {
   parameter: Parameter;
@@ -32,9 +33,13 @@ export const ParameterControl = ({
 
   return (
     <Field>
-      <FieldTitle>{parameter.name}</FieldTitle>
-
-      <div className="mt-2 flex items-center gap-3">
+      <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(3.75rem,1fr)_minmax(0,1.5fr)_2.25rem] items-center gap-2">
+        <FieldTitle
+          className="min-w-0 w-full overflow-hidden"
+          title={parameter.name}
+        >
+          <span className="block min-w-0 truncate">{parameter.name}</span>
+        </FieldTitle>
         <Input
           type="text"
           value={inputValue}
@@ -60,7 +65,7 @@ export const ParameterControl = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
-          className="w-24"
+          className="w-full"
         />
 
         <Slider
@@ -83,11 +88,16 @@ export const ParameterControl = ({
           min={parameter.min}
           max={parameter.max}
           step={parameter.step}
-          className="flex-1"
+          className="min-w-0"
         />
 
-        <Button size="icon" variant="ghost" onClick={() => onEdit(parameter)}>
-          Edit
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => onEdit(parameter)}
+          className="size-9"
+        >
+          <Pencil />
         </Button>
       </div>
     </Field>
