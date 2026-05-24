@@ -33,9 +33,9 @@ export const ParameterControl = ({
 
   return (
     <Field>
-      <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(3.75rem,1fr)_minmax(0,1.5fr)_2.25rem] items-center gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(3.75rem,1fr)_minmax(0,1.5fr)_2.25rem] items-center gap-1.5">
         <FieldTitle
-          className="min-w-0 w-full overflow-hidden"
+          className="min-w-0 w-full overflow-hidden text-xs"
           title={parameter.name}
         >
           <span className="block min-w-0 truncate">{parameter.name}</span>
@@ -65,7 +65,7 @@ export const ParameterControl = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
-          className="w-full"
+          className="h-8 w-full px-2 text-xs md:text-xs"
         />
 
         <Slider
@@ -95,7 +95,7 @@ export const ParameterControl = ({
           size="icon"
           variant="ghost"
           onClick={() => onEdit(parameter)}
-          className="size-9"
+          className="size-8"
         >
           <Pencil />
         </Button>

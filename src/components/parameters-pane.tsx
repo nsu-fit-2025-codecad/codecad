@@ -35,9 +35,9 @@ export const ParametersPane = ({
 
   return (
     <Card className={cn('flex h-full flex-col overflow-hidden', className)}>
-      <CardHeader className="gap-3">
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-2">
             <CardTitle>Parameters</CardTitle>
             <AddParameterDialog
               onBeforeCommit={onBeforeParameterCommit}
@@ -56,8 +56,8 @@ export const ParametersPane = ({
         </div>
       </CardHeader>
       <ScrollArea className="min-h-0 w-full flex-1">
-        <CardContent>
-          <FieldSet>
+        <CardContent className="px-4 pb-4 pt-0">
+          <FieldSet className="gap-2">
             {parameters.map((parameter) => (
               <ParameterControl
                 key={parameter.name}
