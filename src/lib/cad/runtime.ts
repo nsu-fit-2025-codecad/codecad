@@ -937,18 +937,48 @@ const shouldAddDogboneAtEnd = (
   dogbone: PanelDogboneMode | undefined
 ): boolean => dogbone === 'end' || dogbone === 'both';
 
+interface SegmentDogboneCenterOptions {
+  readonly radius: number;
+  readonly getStartCorner: (offset: number) => Point2D;
+  readonly getEndCorner: (offset: number) => Point2D;
+  readonly startDirection: Point2D;
+  readonly endDirection: Point2D;
+}
+
+const getMakerLikeDogboneCenter = (
+  corner: Point2D,
+  direction: Point2D,
+  radius: number
+): Point2D => {
+  const offset = radius / Math.SQRT2;
+
+  return [corner[0] + direction[0] * offset, corner[1] + direction[1] * offset];
+};
+
 const appendSegmentDogboneCenters = (
   reliefCenters: Point2D[],
   profile: ResolvedPanelEdgeProfile,
-  getCenter: (offset: number) => Point2D
+  options: SegmentDogboneCenterOptions
 ): void => {
   profile.segments.forEach((segment) => {
     if (shouldAddDogboneAtStart(segment.dogbone)) {
-      reliefCenters.push(getCenter(segment.start));
+      reliefCenters.push(
+        getMakerLikeDogboneCenter(
+          options.getStartCorner(segment.start),
+          options.startDirection,
+          options.radius
+        )
+      );
     }
 
     if (shouldAddDogboneAtEnd(segment.dogbone)) {
-      reliefCenters.push(getCenter(segment.end));
+      reliefCenters.push(
+        getMakerLikeDogboneCenter(
+          options.getEndCorner(segment.end),
+          options.endDirection,
+          options.radius
+        )
+      );
     }
   });
 };
@@ -972,40 +1002,56 @@ const buildDogboneReliefCuts = (
 
   if (profiles.top) {
     const y = profiles.top.kind === 'tabs' ? 0 : profiles.top.depth;
+    const verticalDirection = profiles.top.kind === 'tabs' ? -1 : 1;
 
-    appendSegmentDogboneCenters(reliefCenters, profiles.top, (offset) => [
-      offset,
-      y,
-    ]);
+    appendSegmentDogboneCenters(reliefCenters, profiles.top, {
+      radius,
+      getStartCorner: (offset) => [offset, y],
+      getEndCorner: (offset) => [offset, y],
+      startDirection: [-1, verticalDirection],
+      endDirection: [1, verticalDirection],
+    });
   }
 
   if (profiles.right) {
     const x =
       profiles.right.kind === 'tabs' ? width : width - profiles.right.depth;
+    const horizontalDirection = profiles.right.kind === 'tabs' ? 1 : -1;
 
-    appendSegmentDogboneCenters(reliefCenters, profiles.right, (offset) => [
-      x,
-      offset,
-    ]);
+    appendSegmentDogboneCenters(reliefCenters, profiles.right, {
+      radius,
+      getStartCorner: (offset) => [x, offset],
+      getEndCorner: (offset) => [x, offset],
+      startDirection: [horizontalDirection, -1],
+      endDirection: [horizontalDirection, 1],
+    });
   }
 
   if (profiles.bottom) {
     const y =
       profiles.bottom.kind === 'tabs' ? height : height - profiles.bottom.depth;
+    const verticalDirection = profiles.bottom.kind === 'tabs' ? 1 : -1;
 
-    appendSegmentDogboneCenters(reliefCenters, profiles.bottom, (offset) => [
-      offset,
-      y,
-    ]);
+    appendSegmentDogboneCenters(reliefCenters, profiles.bottom, {
+      radius,
+      getStartCorner: (offset) => [offset, y],
+      getEndCorner: (offset) => [offset, y],
+      startDirection: [-1, verticalDirection],
+      endDirection: [1, verticalDirection],
+    });
   }
 
   if (profiles.left) {
     const x = profiles.left.kind === 'tabs' ? 0 : profiles.left.depth;
+    const horizontalDirection = profiles.left.kind === 'tabs' ? -1 : 1;
 
-    appendSegmentDogboneCenters(reliefCenters, profiles.left, (offset) => [
-      x,
-      offset,
-    ]);
+    appendSegmentDogboneCenters(reliefCenters, profiles.left, {
+      radius,
+      getStartCorner: (offset) => [x, offset],
+      getEndCorner: (offset) => [x, offset],
+      startDirection: [horizontalDirection, -1],
+      endDirection: [horizontalDirection, 1],
+    });
   }
 
   return reliefCenters.map((center) => cad.circle(radius).centerAt(center));

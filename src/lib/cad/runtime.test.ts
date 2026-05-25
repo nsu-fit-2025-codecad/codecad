@@ -407,6 +407,54 @@ describe('cad shape helpers', () => {
     );
   });
 
+  it('uses maker-like diagonal dogbone centers instead of corner-centered cuts', () => {
+    const topDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'start',
+          },
+        },
+      })
+    );
+    const rightDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          right: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'start',
+          },
+        },
+      })
+    );
+
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], topDogbone)).toBe(
+      false
+    );
+    expect(makerjs.measure.isPointInsideModel([51.8, -0.1], topDogbone)).toBe(
+      true
+    );
+    expect(
+      makerjs.measure.isPointInsideModel([120.5, 25.1], rightDogbone)
+    ).toBe(false);
+    expect(
+      makerjs.measure.isPointInsideModel([120.1, 26.8], rightDogbone)
+    ).toBe(true);
+  });
+
   it('supports dogbone relief on only the start or end of each profiled segment', () => {
     const withStartDogbone = normalizeEditorModelResult(
       cad.panel({
