@@ -77,6 +77,18 @@ describe('configureCadEditor', () => {
     expect(CAD_EDITOR_EXTRA_LIB).toContain('panel(options: {');
     expect(CAD_EDITOR_EXTRA_LIB).toContain("{ kind: 'plain' }");
     expect(CAD_EDITOR_EXTRA_LIB).toContain("kind: 'tabs' | 'notches';");
+    expect(CAD_EDITOR_EXTRA_LIB).toContain("placement?: 'balanced' | 'edge';");
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      "type PanelDogboneMode = 'start' | 'end' | 'both' | 'none';"
+    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      "dogbone?: 'start' | 'end' | 'both' | 'none';"
+    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain(
+      "dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];"
+    );
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('toolDiameter?: number;');
+    expect(CAD_EDITOR_EXTRA_LIB).toContain('fromMakerModel(');
     expect(CAD_EDITOR_EXTRA_LIB).toContain('flatLayout(');
     expect(CAD_EDITOR_EXTRA_LIB).toContain('parts: CadChildrenInput,');
   });

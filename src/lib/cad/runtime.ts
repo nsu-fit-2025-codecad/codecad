@@ -17,6 +17,7 @@ import type {
   MirrorAxis,
   NodeMetadata,
   PanelInsetOptions,
+  PanelDogboneMode,
   PanelEdgeOptions,
   PanelEdgesOptions,
   PanelOptions,
@@ -483,6 +484,51 @@ const isProfiledPanelEdge = (
   edge: PanelEdgeOptions | undefined
 ): edge is ProfiledPanelEdgeOptions => !!edge && edge.kind !== 'plain';
 
+const isActivePanelDogboneMode = (dogbone: PanelDogboneMode | undefined) =>
+  dogbone === 'start' || dogbone === 'end' || dogbone === 'both';
+
+const getPanelSegmentDogboneMode = (
+  edge: ProfiledPanelEdgeOptions,
+  index: number
+): PanelDogboneMode | undefined => {
+  if (edge.dogbones && index < edge.dogbones.length) {
+    return edge.dogbones[index];
+  }
+
+  return edge.dogbone;
+};
+
+const usesDogboneRelief = (
+  edge: PanelEdgeOptions | undefined
+): edge is ProfiledPanelEdgeOptions =>
+  isProfiledPanelEdge(edge) &&
+  Array.from({ length: edge.count }, (_, index) =>
+    getPanelSegmentDogboneMode(edge, index)
+  ).some(isActivePanelDogboneMode);
+
+const resolvePanelDogboneRadius = (
+  edges: PanelEdgesOptions | undefined,
+  toolDiameter: number | undefined
+): number | undefined => {
+  const hasDogboneProfiles = Object.values(edges ?? {}).some((edge) =>
+    usesDogboneRelief(edge)
+  );
+
+  if (!hasDogboneProfiles) {
+    return undefined;
+  }
+
+  if (toolDiameter === undefined) {
+    throw new Error(
+      'panel toolDiameter must be provided when dogbone relief is enabled'
+    );
+  }
+
+  assertPositiveNumber(toolDiameter, 'toolDiameter');
+
+  return toolDiameter / 2;
+};
+
 const validatePanelEdges = (
   width: number,
   height: number,
@@ -528,6 +574,15 @@ const validatePanelEdges = (
       `${edgeName}.segmentLength`
     );
 
+    if (
+      edgeOptions.dogbones !== undefined &&
+      edgeOptions.dogbones.length > edgeOptions.count
+    ) {
+      throw new Error(
+        `${edgeName}.dogbones cannot contain more entries than ${edgeName}.count`
+      );
+    }
+
     const inset = edgeOptions.inset ?? 0;
     assertNonNegativeNumber(inset, `${edgeName}.inset`);
 
@@ -538,9 +593,13 @@ const validatePanelEdges = (
       height
     );
     const availableLength = edgeLength - inset * 2;
-    const gap =
-      (availableLength - edgeOptions.count * edgeOptions.segmentLength) /
-      (edgeOptions.count + 1);
+    const distribution = distributeEdgeSegments(
+      edgeLength,
+      edgeOptions.count,
+      edgeOptions.segmentLength,
+      inset,
+      edgeOptions.placement ?? 'balanced'
+    );
 
     if (availableLength <= 0) {
       throw new Error(`${edgeName} inset leaves no usable edge length`);
@@ -567,7 +626,14 @@ const validatePanelEdges = (
       );
     }
 
-    if (edgeOptions.kind === 'notches' && gap < clearance) {
+    const requiresClearanceGap =
+      edgeOptions.placement === 'edge' ? edgeOptions.count > 1 : true;
+
+    if (
+      edgeOptions.kind === 'notches' &&
+      requiresClearanceGap &&
+      distribution.gap < clearance
+    ) {
       throw new Error(
         `${edgeName} clearance is too large for the selected notch spacing`
       );
@@ -575,18 +641,40 @@ const validatePanelEdges = (
   });
 };
 
+interface EdgeSegmentDistribution {
+  readonly gap: number;
+  readonly starts: number[];
+}
+
 const distributeEdgeSegments = (
   edgeLength: number,
   count: number,
   segmentLength: number,
-  inset: number
-): number[] => {
+  inset: number,
+  placement: ProfiledPanelEdgeOptions['placement'] = 'balanced'
+): EdgeSegmentDistribution => {
   const availableLength = edgeLength - inset * 2;
-  const gap = (availableLength - count * segmentLength) / (count + 1);
+  const totalSegmentLength = count * segmentLength;
 
-  return Array.from({ length: count }, (_, index) => {
-    return inset + gap * (index + 1) + segmentLength * index;
-  });
+  if (placement === 'edge') {
+    const gap = (availableLength - totalSegmentLength) / count;
+
+    return {
+      gap,
+      starts: Array.from({ length: count }, (_, index) => {
+        return inset + index * (segmentLength + gap);
+      }),
+    };
+  }
+
+  const gap = (availableLength - totalSegmentLength) / (count + 1);
+
+  return {
+    gap,
+    starts: Array.from({ length: count }, (_, index) => {
+      return inset + gap * (index + 1) + segmentLength * index;
+    }),
+  };
 };
 
 type PanelEdgeName = keyof PanelEdgesOptions;
@@ -597,6 +685,7 @@ interface ResolvedPanelEdgeProfile {
   readonly segments: ReadonlyArray<{
     readonly start: number;
     readonly end: number;
+    readonly dogbone: PanelDogboneMode | undefined;
   }>;
 }
 
@@ -692,20 +781,22 @@ const resolvePanelEdgeProfile = (
   const edgeLength = getPanelEdgeLength(edgeName, width, height);
   const inset = edgeOptions.inset ?? 0;
   const baseDepth = resolvePanelEdgeDepth(edgeOptions, thickness);
-  const segmentStarts = distributeEdgeSegments(
+  const distribution = distributeEdgeSegments(
     edgeLength,
     edgeOptions.count,
     edgeOptions.segmentLength,
-    inset
+    inset,
+    edgeOptions.placement ?? 'balanced'
   );
 
   if (edgeOptions.kind === 'tabs') {
     return {
       kind: 'tabs',
       depth: baseDepth,
-      segments: segmentStarts.map((start) => ({
+      segments: distribution.starts.map((start, index) => ({
         start,
         end: start + edgeOptions.segmentLength,
+        dogbone: getPanelSegmentDogboneMode(edgeOptions, index),
       })),
     };
   }
@@ -713,9 +804,19 @@ const resolvePanelEdgeProfile = (
   return {
     kind: 'notches',
     depth: baseDepth + clearance,
-    segments: segmentStarts.map((start) => ({
-      start: start - clearance / 2,
-      end: start + edgeOptions.segmentLength + clearance / 2,
+    segments: distribution.starts.map((start, index) => ({
+      start:
+        edgeOptions.placement === 'edge'
+          ? Math.max(0, start - clearance / 2)
+          : start - clearance / 2,
+      end:
+        edgeOptions.placement === 'edge'
+          ? Math.min(
+              edgeLength,
+              start + edgeOptions.segmentLength + clearance / 2
+            )
+          : start + edgeOptions.segmentLength + clearance / 2,
+      dogbone: getPanelSegmentDogboneMode(edgeOptions, index),
     })),
   };
 };
@@ -828,12 +929,95 @@ const appendLeftEdgeProfile = (
   }
 };
 
+const shouldAddDogboneAtStart = (
+  dogbone: PanelDogboneMode | undefined
+): boolean => dogbone === 'start' || dogbone === 'both';
+
+const shouldAddDogboneAtEnd = (
+  dogbone: PanelDogboneMode | undefined
+): boolean => dogbone === 'end' || dogbone === 'both';
+
+const appendSegmentDogboneCenters = (
+  reliefCenters: Point2D[],
+  profile: ResolvedPanelEdgeProfile,
+  getCenter: (offset: number) => Point2D
+): void => {
+  profile.segments.forEach((segment) => {
+    if (shouldAddDogboneAtStart(segment.dogbone)) {
+      reliefCenters.push(getCenter(segment.start));
+    }
+
+    if (shouldAddDogboneAtEnd(segment.dogbone)) {
+      reliefCenters.push(getCenter(segment.end));
+    }
+  });
+};
+
+const buildDogboneReliefCuts = (
+  width: number,
+  height: number,
+  radius: number | undefined,
+  profiles: {
+    readonly top: ResolvedPanelEdgeProfile | null;
+    readonly right: ResolvedPanelEdgeProfile | null;
+    readonly bottom: ResolvedPanelEdgeProfile | null;
+    readonly left: ResolvedPanelEdgeProfile | null;
+  }
+): Shape2DLike[] => {
+  if (radius === undefined) {
+    return [];
+  }
+
+  const reliefCenters: Point2D[] = [];
+
+  if (profiles.top) {
+    const y = profiles.top.kind === 'tabs' ? 0 : profiles.top.depth;
+
+    appendSegmentDogboneCenters(reliefCenters, profiles.top, (offset) => [
+      offset,
+      y,
+    ]);
+  }
+
+  if (profiles.right) {
+    const x =
+      profiles.right.kind === 'tabs' ? width : width - profiles.right.depth;
+
+    appendSegmentDogboneCenters(reliefCenters, profiles.right, (offset) => [
+      x,
+      offset,
+    ]);
+  }
+
+  if (profiles.bottom) {
+    const y =
+      profiles.bottom.kind === 'tabs' ? height : height - profiles.bottom.depth;
+
+    appendSegmentDogboneCenters(reliefCenters, profiles.bottom, (offset) => [
+      offset,
+      y,
+    ]);
+  }
+
+  if (profiles.left) {
+    const x = profiles.left.kind === 'tabs' ? 0 : profiles.left.depth;
+
+    appendSegmentDogboneCenters(reliefCenters, profiles.left, (offset) => [
+      x,
+      offset,
+    ]);
+  }
+
+  return reliefCenters.map((center) => cad.circle(radius).centerAt(center));
+};
+
 const buildPanelEdgeContour = (
   width: number,
   height: number,
   edges: PanelEdgesOptions | undefined,
   thickness: number | undefined,
-  clearance: number
+  clearance: number,
+  dogboneRadius?: number
 ): Shape2D => {
   const top = resolvePanelEdgeProfile(
     'top',
@@ -875,13 +1059,24 @@ const buildPanelEdgeContour = (
   appendBottomEdgeProfile(contourPoints, width, height, bottom);
   appendLeftEdgeProfile(contourPoints, height, left);
 
-  return asShape(
+  let contour = asShape(
     cad
       .polyline(normalizeClosedContourPoints(contourPoints), {
         closed: true,
       })
       .getNode()
   );
+
+  buildDogboneReliefCuts(width, height, dogboneRadius, {
+    top,
+    right,
+    bottom,
+    left,
+  }).forEach((relief) => {
+    contour = contour.cut(relief);
+  });
+
+  return contour;
 };
 
 const unionMany = (
@@ -1348,6 +1543,11 @@ const buildPanel = (options: PanelOptions): Assembly2D => {
     clearance
   );
 
+  const dogboneRadius = resolvePanelDogboneRadius(
+    options.edges,
+    options.toolDiameter
+  );
+
   const bodyBase =
     hasEdgeProfiles && radius === 0
       ? buildPanelEdgeContour(
@@ -1355,7 +1555,8 @@ const buildPanel = (options: PanelOptions): Assembly2D => {
           options.height,
           options.edges,
           options.thickness,
-          clearance
+          clearance,
+          dogboneRadius
         )
       : createOuterRect(options.width, options.height, radius);
   const body = (options.holes ?? []).reduce((current, hole) => {
@@ -1716,6 +1917,10 @@ export const cad: CadRuntime & {
       bezierAccuracy: options?.bezierAccuracy,
     });
 
+    return asShape(createModelNode(model));
+  },
+
+  fromMakerModel(model: IModel) {
     return asShape(createModelNode(model));
   },
 
