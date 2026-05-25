@@ -108,6 +108,7 @@ type Anchor2D =
   | 'bottomLeft'
   | 'left';
 type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
+type PanelDogboneMode = 'start' | 'end' | 'both' | 'none';
 
 type PanelEdgeOptions =
   | { kind: 'plain' }
@@ -117,6 +118,9 @@ type PanelEdgeOptions =
       segmentLength: number;
       depth?: number;
       inset?: number;
+      placement?: 'balanced' | 'edge';
+      dogbone?: 'start' | 'end' | 'both' | 'none';
+      dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];
     };
 
 interface PanelEdgesOptions {
@@ -149,6 +153,7 @@ interface PanelOptions {
   inset?: PanelInsetOptions;
   thickness?: number;
   clearance?: number;
+  toolDiameter?: number;
   edges?: PanelEdgesOptions;
   holes?: readonly PanelHoleSpec[];
 }
@@ -214,6 +219,9 @@ interface CadRuntime {
             segmentLength: number;
             depth?: number;
             inset?: number;
+            placement?: 'balanced' | 'edge';
+            dogbone?: 'start' | 'end' | 'both' | 'none';
+            dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];
           };
       right?:
         | { kind: 'plain' }
@@ -223,6 +231,9 @@ interface CadRuntime {
             segmentLength: number;
             depth?: number;
             inset?: number;
+            placement?: 'balanced' | 'edge';
+            dogbone?: 'start' | 'end' | 'both' | 'none';
+            dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];
           };
       bottom?:
         | { kind: 'plain' }
@@ -232,6 +243,9 @@ interface CadRuntime {
             segmentLength: number;
             depth?: number;
             inset?: number;
+            placement?: 'balanced' | 'edge';
+            dogbone?: 'start' | 'end' | 'both' | 'none';
+            dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];
           };
       left?:
         | { kind: 'plain' }
@@ -241,8 +255,12 @@ interface CadRuntime {
             segmentLength: number;
             depth?: number;
             inset?: number;
+            placement?: 'balanced' | 'edge';
+            dogbone?: 'start' | 'end' | 'both' | 'none';
+            dogbones?: readonly ('start' | 'end' | 'both' | 'none')[];
           };
     };
+    toolDiameter?: number;
     holes?: readonly Array<
       | {
           kind: 'circle';
@@ -286,6 +304,7 @@ interface CadRuntime {
     centerHole?: number;
   }): CadEntity;
   fromSvgPathData(pathData: string, options?: { bezierAccuracy?: number }): CadEntity;
+  fromMakerModel(model: unknown): CadEntity;
   flatLayout(
     parts: CadChildrenInput,
     options: {

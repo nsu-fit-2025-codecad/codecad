@@ -144,6 +144,7 @@ export interface PanelInsetOptions {
 }
 
 export type PanelEdgeKind = 'plain' | 'tabs' | 'notches';
+export type PanelDogboneMode = 'start' | 'end' | 'both' | 'none';
 
 export interface PlainPanelEdgeOptions {
   readonly kind: 'plain';
@@ -155,6 +156,9 @@ export interface ProfiledPanelEdgeOptions {
   readonly segmentLength: number;
   readonly depth?: number;
   readonly inset?: number;
+  readonly placement?: 'balanced' | 'edge';
+  readonly dogbone?: PanelDogboneMode;
+  readonly dogbones?: readonly PanelDogboneMode[];
 }
 
 export type PanelEdgeOptions = PlainPanelEdgeOptions | ProfiledPanelEdgeOptions;
@@ -174,6 +178,7 @@ export interface PanelOptions {
   readonly holes?: readonly PanelHoleSpec[];
   readonly thickness?: number;
   readonly clearance?: number;
+  readonly toolDiameter?: number;
   readonly edges?: PanelEdgesOptions;
 }
 
@@ -301,6 +306,7 @@ export interface CadRuntime {
     pathData: string,
     options?: SvgPathImportOptions
   ): Shape2DLike;
+  fromMakerModel(model: IModel): Shape2DLike;
   flatLayout(parts: CadChildrenInput, options: FlatLayoutOptions): SketchLike;
   assembly(children: CadChildrenInput): Assembly2DLike;
   sketch(children: CadChildrenInput): SketchLike;

@@ -240,6 +240,65 @@ describe('cad shape helpers', () => {
     expect(hasRedundantCollinearPoints(bodyNode.points)).toBe(false);
   });
 
+  it('keeps balanced edge placement as the default panel behavior', () => {
+    const points = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 3,
+        edges: {
+          top: { kind: 'tabs', count: 2, segmentLength: 20, inset: 0 },
+        },
+      })
+    );
+
+    expect(hasPoint(points, [20, -3])).toBe(true);
+    expect(hasPoint(points, [80, -3])).toBe(true);
+    expect(hasPoint(points, [0, -3])).toBe(false);
+    expect(hasPoint(points, [100, -3])).toBe(false);
+  });
+
+  it('supports edge placement for panel edge segments', () => {
+    const points = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 3,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+
+    expect(hasPoint(points, [0, -3])).toBe(true);
+    expect(hasPoint(points, [50, -3])).toBe(true);
+    expect(hasPoint(points, [100, -3])).toBe(false);
+  });
+
+  it('rejects edge placement profiles that do not fit', () => {
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 3,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 60,
+            placement: 'edge',
+          },
+        },
+      })
+    ).toThrow(/edge profile does not fit/);
+  });
+
   it('keeps panel holes as boolean cuts on top of the outer contour', () => {
     const panelNode = cad
       .panel({
@@ -270,6 +329,475 @@ describe('cad shape helpers', () => {
 
     expect(bodyNode.operation).toBe('cut');
     expect(bodyNode.left.kind).toBe('polyline');
+  });
+
+  it('adds dogbone relief cuts to notch inner corners', () => {
+    const withoutDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        edges: {
+          top: { kind: 'notches', count: 1, segmentLength: 20 },
+        },
+      })
+    );
+    const withDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'notches',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'both',
+          },
+        },
+      })
+    );
+    const dxf = makerjs.exporter.toDXF(withDogbone);
+
+    expect(
+      makerjs.measure.isPointInsideModel([49.8, 2.6], withoutDogbone)
+    ).toBe(true);
+    expect(makerjs.measure.isPointInsideModel([49.8, 2.6], withDogbone)).toBe(
+      false
+    );
+    expect(dxf).toContain('ENTITIES');
+    expect(dxf).not.toContain('NaN');
+    expect(dxf).not.toContain('undefined');
+  });
+
+  it('skips open vertical notch corner detours in edge placement', () => {
+    const rightPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          right: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 20,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+    const leftPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          left: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 20,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+
+    expect(hasPoint(rightPoints, [100, 0])).toBe(false);
+    expect(hasPoint(rightPoints, [96, 0])).toBe(true);
+    expect(hasSegment(rightPoints, [100, 0], [96, 0])).toBe(false);
+    expect(hasPoint(leftPoints, [0, 0])).toBe(false);
+    expect(hasPoint(leftPoints, [4, 0])).toBe(true);
+    expect(hasSegment(leftPoints, [4, 0], [0, 0])).toBe(false);
+  });
+
+  it('skips open vertical notch corner detours when the last notch reaches the edge', () => {
+    const rightPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          right: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 35,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+    const leftPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          left: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 35,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+
+    expect(hasPoint(rightPoints, [100, 70])).toBe(false);
+    expect(hasPoint(rightPoints, [96, 70])).toBe(true);
+    expect(hasSegment(rightPoints, [96, 70], [100, 70])).toBe(false);
+    expect(hasPoint(leftPoints, [0, 70])).toBe(false);
+    expect(hasPoint(leftPoints, [4, 70])).toBe(true);
+    expect(hasSegment(leftPoints, [0, 70], [4, 70])).toBe(false);
+  });
+
+  it('skips open horizontal notch corner detours in edge placement', () => {
+    const topPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          top: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 20,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+    const bottomPoints = getPanelBodyPolylinePoints(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        clearance: 0,
+        edges: {
+          bottom: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 50,
+            inset: 0,
+            placement: 'edge',
+          },
+        },
+      })
+    );
+
+    expect(hasPoint(topPoints, [0, 0])).toBe(false);
+    expect(hasPoint(topPoints, [0, 4])).toBe(true);
+    expect(hasSegment(topPoints, [0, 0], [0, 4])).toBe(false);
+    expect(hasPoint(bottomPoints, [100, 70])).toBe(false);
+    expect(hasPoint(bottomPoints, [100, 66])).toBe(true);
+    expect(hasSegment(bottomPoints, [100, 70], [100, 66])).toBe(false);
+  });
+
+  it('adds dogbone relief cuts to tab root corners', () => {
+    const withoutDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        edges: {
+          top: { kind: 'tabs', count: 1, segmentLength: 20 },
+        },
+      })
+    );
+    const withDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'both',
+          },
+        },
+      })
+    );
+
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], withoutDogbone)).toBe(
+      true
+    );
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], withDogbone)).toBe(
+      false
+    );
+  });
+
+  it('uses maker-like diagonal dogbone centers instead of corner-centered cuts', () => {
+    const topDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'start',
+          },
+        },
+      })
+    );
+    const rightDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          right: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'start',
+          },
+        },
+      })
+    );
+
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], topDogbone)).toBe(
+      false
+    );
+    expect(makerjs.measure.isPointInsideModel([51.8, -0.1], topDogbone)).toBe(
+      true
+    );
+    expect(
+      makerjs.measure.isPointInsideModel([120.5, 25.1], rightDogbone)
+    ).toBe(false);
+    expect(
+      makerjs.measure.isPointInsideModel([120.1, 26.8], rightDogbone)
+    ).toBe(true);
+  });
+
+  it('supports dogbone relief on only the start or end of each profiled segment', () => {
+    const withStartDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'start',
+          },
+        },
+      })
+    );
+    const withEndDogbone = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 1,
+            segmentLength: 20,
+            dogbone: 'end',
+          },
+        },
+      })
+    );
+
+    expect(
+      makerjs.measure.isPointInsideModel([50.5, -1], withStartDogbone)
+    ).toBe(false);
+    expect(
+      makerjs.measure.isPointInsideModel([69.5, -1], withStartDogbone)
+    ).toBe(true);
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], withEndDogbone)).toBe(
+      true
+    );
+    expect(makerjs.measure.isPointInsideModel([69.5, -1], withEndDogbone)).toBe(
+      false
+    );
+  });
+
+  it('supports individual dogbone relief modes for each profiled segment', () => {
+    const withMixedDogbones = normalizeEditorModelResult(
+      cad.panel({
+        width: 120,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 3,
+            segmentLength: 20,
+            placement: 'edge',
+            dogbones: ['start', 'none', 'end'],
+          },
+        },
+      })
+    );
+
+    expect(
+      makerjs.measure.isPointInsideModel([0.5, -1], withMixedDogbones)
+    ).toBe(false);
+    expect(
+      makerjs.measure.isPointInsideModel([40.5, -1], withMixedDogbones)
+    ).toBe(true);
+    expect(
+      makerjs.measure.isPointInsideModel([80.5, -1], withMixedDogbones)
+    ).toBe(true);
+    expect(
+      makerjs.measure.isPointInsideModel([99.5, -1], withMixedDogbones)
+    ).toBe(false);
+  });
+
+  it('lets dogbones override edge dogbone shorthand per segment', () => {
+    const withOverride = normalizeEditorModelResult(
+      cad.panel({
+        width: 100,
+        height: 70,
+        thickness: 4,
+        toolDiameter: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            placement: 'edge',
+            dogbone: 'both',
+            dogbones: ['none'],
+          },
+        },
+      })
+    );
+
+    expect(makerjs.measure.isPointInsideModel([0.5, -1], withOverride)).toBe(
+      true
+    );
+    expect(makerjs.measure.isPointInsideModel([19.5, -1], withOverride)).toBe(
+      true
+    );
+    expect(makerjs.measure.isPointInsideModel([50.5, -1], withOverride)).toBe(
+      false
+    );
+    expect(makerjs.measure.isPointInsideModel([69.5, -1], withOverride)).toBe(
+      false
+    );
+  });
+
+  it('requires toolDiameter when dogbone relief applies to profiled edges', () => {
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          top: { kind: 'plain' },
+          bottom: { kind: 'plain' },
+        },
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            dogbone: 'none',
+            dogbones: ['none', 'none'],
+          },
+        },
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            dogbone: 'both',
+          },
+        },
+      })
+    ).toThrow(/toolDiameter must be provided/);
+
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          top: {
+            kind: 'notches',
+            count: 2,
+            segmentLength: 20,
+            dogbone: 'both',
+          },
+        },
+      })
+    ).toThrow(/toolDiameter must be provided/);
+
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          top: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            dogbone: 'none',
+            dogbones: ['none', 'start'],
+          },
+        },
+      })
+    ).toThrow(/toolDiameter must be provided/);
+  });
+
+  it('rejects dogbones arrays longer than the edge segment count', () => {
+    expect(() =>
+      cad.panel({
+        width: 100,
+        height: 60,
+        thickness: 4,
+        edges: {
+          right: {
+            kind: 'tabs',
+            count: 2,
+            segmentLength: 20,
+            dogbones: ['start', 'none', 'end'],
+          },
+        },
+      })
+    ).toThrow(/right\.dogbones cannot contain more entries than right\.count/);
   });
 
   it('uses clearance to enlarge notch openings', () => {
@@ -378,6 +906,48 @@ describe('cad shape helpers', () => {
     expect(Object.keys(model.models ?? {}).sort()).toEqual(['grid', 'ticks']);
     expect(Object.keys(model.models?.ticks?.models ?? {}).length).toBe(6);
     expect(Object.keys(model.models?.grid?.models ?? {}).length).toBe(4);
+  });
+
+  it('wraps Maker.js models back into the cad shape flow', () => {
+    const baseModel = new makerjs.models.Rectangle(80, 40);
+    const dogbone = new makerjs.models.Dogbone(26, 8, 2);
+    makerjs.model.moveRelative(dogbone, [27, 16]);
+    const makerPanel = makerjs.model.combineSubtraction(baseModel, dogbone);
+    const wrappedPanel = cad
+      .fromMakerModel(makerPanel)
+      .translate(5, 0)
+      .cut(cad.circle(4).centerAt([20, 20]))
+      .onLayer('cut');
+    const sketch = cad.flatLayout(
+      {
+        bottom: wrappedPanel,
+        side: cad.rect(20, 12),
+      },
+      { columns: 2, gapX: 10, gapY: 8 }
+    );
+    const model = normalizeEditorModelResult(sketch);
+    const bottom = model.models?.bottom;
+
+    expect(Object.keys(model.models ?? {}).sort()).toEqual(['bottom', 'side']);
+    expect(bottom?.layer).toBe('cut');
+    expect(getTopLevelModelExtents(model, 'side').low[0]).toBeGreaterThan(
+      getTopLevelModelExtents(model, 'bottom').high[0]
+    );
+  });
+
+  it('clones Maker.js models when wrapping them into cad entities', () => {
+    const sourceModel = new makerjs.models.Rectangle(40, 20);
+    const wrapped = cad.fromMakerModel(sourceModel);
+
+    makerjs.model.moveRelative(sourceModel, [100, 50]);
+
+    const model = normalizeEditorModelResult(wrapped);
+    const extents = makerjs.measure.modelExtents(model)!;
+
+    expect(extents.low[0]).toBeCloseTo(0, 6);
+    expect(extents.low[1]).toBeCloseTo(0, 6);
+    expect(extents.high[0]).toBeCloseTo(40, 6);
+    expect(extents.high[1]).toBeCloseTo(20, 6);
   });
 
   it('accepts arrays directly in cad.sketch for multi-part scenes', () => {
@@ -587,6 +1157,52 @@ const getChildModelExtents = (
     center: [extents.center[0] + origin[0], extents.center[1] + origin[1]],
   };
 };
+
+const getPanelBodyPolylinePoints = (
+  panel: ReturnType<typeof cad.panel>
+): readonly (readonly [number, number])[] => {
+  const panelNode = panel.getNode();
+
+  if (panelNode.kind !== 'assembly') {
+    throw new Error('Expected an assembly panel');
+  }
+
+  const bodyNode = panelNode.children.body;
+
+  if (bodyNode.kind !== 'polyline') {
+    throw new Error('Expected a polyline panel body');
+  }
+
+  return bodyNode.points;
+};
+
+const hasPoint = (
+  points: readonly (readonly [number, number])[],
+  target: readonly [number, number]
+): boolean =>
+  points.some(
+    (point) =>
+      Math.abs(point[0] - target[0]) <= PANEL_TEST_EPSILON &&
+      Math.abs(point[1] - target[1]) <= PANEL_TEST_EPSILON
+  );
+
+const hasSegment = (
+  points: readonly (readonly [number, number])[],
+  start: readonly [number, number],
+  end: readonly [number, number]
+): boolean =>
+  points.some((point, index) => {
+    const next = points[(index + 1) % points.length];
+
+    return areTestPointsEqual(point, start) && areTestPointsEqual(next, end);
+  });
+
+const areTestPointsEqual = (
+  point: readonly [number, number],
+  target: readonly [number, number]
+): boolean =>
+  Math.abs(point[0] - target[0]) <= PANEL_TEST_EPSILON &&
+  Math.abs(point[1] - target[1]) <= PANEL_TEST_EPSILON;
 
 const getChildModelCenter = (
   parentModel: makerjs.IModel,
