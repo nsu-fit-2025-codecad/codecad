@@ -17,8 +17,9 @@ import { z } from 'zod';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useParametersStore, Parameter } from '@/store/store';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RESERVED_WORDS } from '@/lib/constants';
+import { Trash2 } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -62,7 +63,8 @@ export const EditParameterDialog = ({
   onBeforeCommit,
   onCommit,
 }: Props) => {
-  const { parameters, edit } = useParametersStore();
+  const { parameters, edit, remove } = useParametersStore();
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const existingNames = parameters.map((p) => p.name);
 
@@ -83,13 +85,29 @@ export const EditParameterDialog = ({
     if (parameter) {
       form.reset(parameter);
     }
+    setIsConfirmingDelete(false);
   }, [parameter, form]);
+
+  useEffect(() => {
+    if (!open) {
+      setIsConfirmingDelete(false);
+    }
+  }, [open]);
 
   function onSubmit(data: EditParameterFormData) {
     if (!parameter) return;
 
     onBeforeCommit?.();
     edit(parameter.name, data);
+    onCommit?.();
+    onOpenChange(false);
+  }
+
+  function onDelete() {
+    if (!parameter) return;
+
+    onBeforeCommit?.();
+    remove(parameter.name);
     onCommit?.();
     onOpenChange(false);
   }
@@ -179,10 +197,39 @@ export const EditParameterDialog = ({
           </FieldGroup>
         </form>
 
-        <DialogFooter>
-          <Button type="submit" form="edit-parameter-form">
-            Save
-          </Button>
+        <DialogFooter className="items-center justify-between gap-3 sm:justify-between">
+          {isConfirmingDelete ? (
+            <>
+              <p className="mr-auto rounded-md border border-destructive/40 bg-destructive/15 px-2 py-1 text-sm font-medium text-foreground">
+                Delete {parameter.name}?
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsConfirmingDelete(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="button" variant="destructive" onClick={onDelete}>
+                Delete parameter
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="mr-auto"
+              >
+                <Trash2 />
+                Delete
+              </Button>
+              <Button type="submit" form="edit-parameter-form">
+                Save
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

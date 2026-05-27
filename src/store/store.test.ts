@@ -56,4 +56,17 @@ describe('useParametersStore', () => {
       { name: 'trayWidth', value: 88, min: 70, max: 110, step: 1 },
     ]);
   });
+
+  it('removes a parameter by name', () => {
+    useParametersStore.getState().replaceAll([
+      { name: 'plateWidth', value: 180, min: 120, max: 260, step: 1 },
+      { name: 'plateHeight', value: 110, min: 80, max: 180, step: 1 },
+    ]);
+
+    useParametersStore.getState().remove('plateWidth');
+
+    expect(useParametersStore.getState().parameters).toEqual([
+      { name: 'plateHeight', value: 110, min: 80, max: 180, step: 1 },
+    ]);
+  });
 });
