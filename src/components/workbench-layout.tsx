@@ -214,7 +214,12 @@ export const WorkbenchLayout = ({
   }, [closedSidePercent, closedSideSize, isModelsPaneOpen, openModelsSize]);
 
   return (
-    <div className={cn('h-full w-full bg-[#101113] p-3', className)}>
+    <div
+      className={cn(
+        'h-full w-full bg-muted/40 p-3 dark:bg-[#101113]',
+        className
+      )}
+    >
       <ResizablePanelGroup
         key={shellLayoutStorageId}
         id={shellLayoutStorageId}
