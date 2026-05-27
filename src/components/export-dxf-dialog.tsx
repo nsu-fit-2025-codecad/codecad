@@ -37,12 +37,11 @@ interface ExportDialogProps {
   model: IModel | null;
   models: AvailableModel[];
   selectedModelId: string | null;
-  svgString: string;
   currentModelRevision: number;
   nestingExportContext: NestingExportContext | null;
   onOpenChange: (open: boolean) => void;
   onExportDxf: (request: DxfExportRequest) => void;
-  onExportSvg: (filenamePrefix: string) => void;
+  onExportSvg: (request: DxfExportRequest) => void;
 }
 
 const scopeLabels: Record<DxfExportScope, string> = {
@@ -66,7 +65,6 @@ export const ExportDialog = ({
   model,
   models,
   selectedModelId,
-  svgString,
   currentModelRevision,
   nestingExportContext,
   onOpenChange,
@@ -147,9 +145,7 @@ export const ExportDialog = ({
       : []),
     ...validation.warnings,
   ];
-  const hasSvgPreview = svgString.trim().length > 0;
-  const canExport =
-    format === 'svg' ? hasSvgPreview : validation.errors.length === 0;
+  const canExport = validation.errors.length === 0;
 
   useEffect(() => {
     if (!open) {
@@ -190,7 +186,7 @@ export const ExportDialog = ({
     }
 
     if (format === 'svg') {
-      onExportSvg(filenamePrefix);
+      onExportSvg(request);
       return;
     }
 
@@ -223,7 +219,7 @@ export const ExportDialog = ({
                 type="button"
                 variant={format === 'svg' ? 'default' : 'outline'}
                 onClick={() => setFormat('svg')}
-                disabled={!hasSvgPreview}
+                disabled={!model}
               >
                 SVG
               </Button>
@@ -239,124 +235,105 @@ export const ExportDialog = ({
             />
           </div>
 
-          {format === 'svg' && (
-            <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-              <p className="font-medium">SVG preview export</p>
-              <p className="mt-1 text-muted-foreground">
-                Exports the current rendered preview exactly as shown.
-              </p>
-              {!hasSvgPreview && (
-                <p className="mt-1 text-destructive">
-                  No SVG preview is available.
-                </p>
+          <>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Scope</Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {scopeOrder.map((scopeId) => (
+                  <Button
+                    key={scopeId}
+                    type="button"
+                    variant={scope === scopeId ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setScope(scopeId)}
+                    disabled={
+                      (scopeId === 'selected' && !selectedModelId) ||
+                      (scopeId === 'packed' && packedIds.size === 0) ||
+                      (scopeId === 'not-fit' && notFitIds.size === 0)
+                    }
+                  >
+                    {scopeLabels[scopeId]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              {shouldShowIncludeTarget && (
+                <label className="flex items-center gap-2 pb-1 text-sm sm:col-start-2 sm:items-end">
+                  <Checkbox
+                    checked={includeTargetModel}
+                    onCheckedChange={(checked) =>
+                      setIncludeTargetModel(checked === true)
+                    }
+                    disabled={!targetModelId}
+                  />
+                  Include target
+                </label>
               )}
             </div>
-          )}
 
-          {format === 'dxf' && (
-            <>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Scope</Label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  {scopeOrder.map((scopeId) => (
-                    <Button
-                      key={scopeId}
-                      type="button"
-                      variant={scope === scopeId ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setScope(scopeId)}
-                      disabled={
-                        (scopeId === 'selected' && !selectedModelId) ||
-                        (scopeId === 'packed' && packedIds.size === 0) ||
-                        (scopeId === 'not-fit' && notFitIds.size === 0)
-                      }
+            <ScrollArea className="h-64 rounded-md border">
+              <div className="space-y-1 p-2">
+                {models.map((availableModel) => {
+                  const isChecked =
+                    scope === 'custom'
+                      ? customModelIds.has(availableModel.id)
+                      : resolvedModelIds.has(availableModel.id);
+
+                  return (
+                    <label
+                      key={availableModel.id}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm',
+                        resolvedModelIds.has(availableModel.id) &&
+                          scope !== 'custom' &&
+                          'bg-accent/50'
+                      )}
                     >
-                      {scopeLabels[scopeId]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                {shouldShowIncludeTarget && (
-                  <label className="flex items-center gap-2 pb-1 text-sm sm:col-start-2 sm:items-end">
-                    <Checkbox
-                      checked={includeTargetModel}
-                      onCheckedChange={(checked) =>
-                        setIncludeTargetModel(checked === true)
-                      }
-                      disabled={!targetModelId}
-                    />
-                    Include target
-                  </label>
-                )}
-              </div>
-
-              <ScrollArea className="h-64 rounded-md border">
-                <div className="space-y-1 p-2">
-                  {models.map((availableModel) => {
-                    const isChecked =
-                      scope === 'custom'
-                        ? customModelIds.has(availableModel.id)
-                        : resolvedModelIds.has(availableModel.id);
-
-                    return (
-                      <label
-                        key={availableModel.id}
-                        className={cn(
-                          'flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm',
-                          resolvedModelIds.has(availableModel.id) &&
-                            scope !== 'custom' &&
-                            'bg-accent/50'
-                        )}
-                      >
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={(checked) =>
-                            toggleCustomModel(
-                              availableModel.id,
-                              checked === true
-                            )
-                          }
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {availableModel.id}
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(checked) =>
+                          toggleCustomModel(availableModel.id, checked === true)
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {availableModel.id}
+                      </span>
+                      {availableModel.id === selectedModelId && (
+                        <span className="text-xs text-muted-foreground">
+                          selected
                         </span>
-                        {availableModel.id === selectedModelId && (
-                          <span className="text-xs text-muted-foreground">
-                            selected
-                          </span>
-                        )}
-                        {availableModel.fit === true && (
-                          <span className="text-xs text-green-600">packed</span>
-                        )}
-                        {availableModel.fit === false && (
-                          <span className="text-xs text-red-600">not fit</span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-
-              <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm">
-                <p className="font-medium">
-                  {validation.selectedCount} model
-                  {validation.selectedCount === 1 ? '' : 's'} selected
-                </p>
-                {validation.errors.map((message) => (
-                  <p key={message} className="mt-1 text-destructive">
-                    {message}
-                  </p>
-                ))}
-                {warnings.map((message) => (
-                  <p key={message} className="mt-1 text-muted-foreground">
-                    {message}
-                  </p>
-                ))}
+                      )}
+                      {availableModel.fit === true && (
+                        <span className="text-xs text-green-600">packed</span>
+                      )}
+                      {availableModel.fit === false && (
+                        <span className="text-xs text-red-600">not fit</span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
-            </>
-          )}
+            </ScrollArea>
+
+            <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm">
+              <p className="font-medium">
+                {validation.selectedCount} model
+                {validation.selectedCount === 1 ? '' : 's'} selected
+              </p>
+              {validation.errors.map((message) => (
+                <p key={message} className="mt-1 text-destructive">
+                  {message}
+                </p>
+              ))}
+              {warnings.map((message) => (
+                <p key={message} className="mt-1 text-muted-foreground">
+                  {message}
+                </p>
+              ))}
+            </div>
+          </>
         </div>
 
         <DialogFooter className="shrink-0 border-t border-border/70 pt-3">
