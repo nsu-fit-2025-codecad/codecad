@@ -88,6 +88,16 @@ import { cn } from '@/lib/utils';
 const AUTORUN_EVALUATION_DELAY_MS = 180;
 const CODE_HISTORY_CAPTURE_DELAY_MS = 600;
 
+const isEditableDebugShortcutTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest('input, textarea, select, [contenteditable="true"]')
+  );
+};
+
 const downloadTextFile = ({
   content,
   filename,
@@ -237,6 +247,31 @@ export const HomePage = () => {
     bumpModelRevision,
   });
   const nestingOptionsRef = useRef(nestingOptions);
+
+  useEffect(() => {
+    const handleDebugDemoShortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        !event.ctrlKey ||
+        !event.altKey ||
+        event.shiftKey ||
+        event.metaKey ||
+        event.key.toLowerCase() !== 'd' ||
+        isEditableDebugShortcutTarget(event.target)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      toggleDemoPane();
+    };
+
+    window.addEventListener('keydown', handleDebugDemoShortcut);
+
+    return () => {
+      window.removeEventListener('keydown', handleDebugDemoShortcut);
+    };
+  }, [toggleDemoPane]);
 
   useEffect(() => {
     nestingOptionsRef.current = nestingOptions;
@@ -1007,12 +1042,10 @@ export const HomePage = () => {
         onOpenProjectLibrary={() => setIsProjectLibraryOpen(true)}
         onUndoProject={undoProject}
         onRedoProject={redoProject}
-        onToggleDemoGuide={toggleDemoPane}
         canUndoProject={historyAvailability.canUndo}
         canRedoProject={historyAvailability.canRedo}
         canExport={model !== null || svg.trim().length > 0}
         isNesting={isRunning}
-        isDemoGuideOpen={isDemoPaneOpen}
       />
       <NestingTargetDialog
         open={isDialogOpen}

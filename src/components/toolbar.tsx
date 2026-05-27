@@ -7,7 +7,6 @@ import {
   Package,
   Redo2,
   Share2,
-  Shapes,
   Undo2,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -19,12 +18,10 @@ interface ToolbarProps {
   onOpenProjectLibrary: () => void;
   onUndoProject: () => void;
   onRedoProject: () => void;
-  onToggleDemoGuide: () => void;
   canUndoProject?: boolean;
   canRedoProject?: boolean;
   canExport?: boolean;
   isNesting?: boolean;
-  isDemoGuideOpen?: boolean;
   className?: string;
 }
 
@@ -35,12 +32,10 @@ export const Toolbar = ({
   onOpenProjectLibrary,
   onUndoProject,
   onRedoProject,
-  onToggleDemoGuide,
   canUndoProject = false,
   canRedoProject = false,
   canExport = false,
   isNesting = false,
-  isDemoGuideOpen = false,
   className,
 }: ToolbarProps) => {
   return (
@@ -108,16 +103,6 @@ export const Toolbar = ({
           aria-label="Copy Share URL"
         >
           <Share2 />
-        </Button>
-        <Button
-          variant={isDemoGuideOpen ? 'default' : 'outline'}
-          onClick={onToggleDemoGuide}
-          className="cursor-pointer"
-          size="icon"
-          aria-label={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
-          title={isDemoGuideOpen ? 'Close demo panel' : 'Open demo panel'}
-        >
-          <Shapes />
         </Button>
         <ThemeToggle />
       </CardContent>
