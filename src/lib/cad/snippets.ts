@@ -816,80 +816,83 @@ return cad.sketch({
   badge: cad.fromSvgPathData(badgePath).translate(10, 10)
 });`
   ),
-  defaultEditorScene: defineSnippet(
-    'Стартовая сцена',
-    `const boardWidth = 300;
-const boardHeight = 220;
-const rabbitPath = [
-  'M 22 82',
-  'C 18 65 23 54 33 46',
-  'C 28 38 26 26 30 14',
-  'C 33 6 38 6 42 15',
-  'C 45 24 46 34 45 43',
-  'C 49 41 53 41 57 43',
-  'C 56 34 57 24 60 15',
-  'C 64 6 69 6 72 14',
-  'C 76 26 74 38 68 46',
-  'C 79 53 84 64 80 82',
-  'C 76 100 63 112 51 112',
-  'C 37 112 25 101 22 82',
-  'Z'
-].join(' ');
-
-const board = cad.roundRect(boardWidth, boardHeight, 24).onLayer('cut');
-
-const door = cad
-  .panel({
-    width: 112,
-    height: 84,
-    radius: 14,
-    inset: { margin: 16, radius: 8 },
-    holes: [
-      { kind: 'circle', x: 18, y: 18, radius: 3 },
-      { kind: 'circle', x: 94, y: 18, radius: 3 },
-      { kind: 'circle', x: 18, y: 66, radius: 3 },
-      { kind: 'circle', x: 94, y: 66, radius: 3 }
-    ]
-  })
-  .translate(18, 20);
-
-const clock = cad.clockFace({
-  radius: 44,
-  rimWidth: 8,
-  tickCount: 12,
-  centerHole: 6
-}).centerAt([228, 74]);
-
-const maze = cad
-  .trackPath(
+  defaultEditorScene: withParameters(
+    defineSnippet(
+      'Стартовая сцена',
+      "const centerX = 0;\nconst centerY = 0;\n\nfunction smoothNoise(index, seed) {\n  const x = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453;\n  return x - Math.floor(x);\n}\n\nfunction pointOnFlower(angle, ringIndex) {\n  const t = angle * petals;\n  const petal = Math.pow((1 + Math.cos(t)) / 2, petalWidth);\n\n  const n1 = smoothNoise(Math.floor(t), ringIndex + 1);\n  const n2 = smoothNoise(Math.floor(t) + 1, ringIndex + 1);\n  const blend = t - Math.floor(t);\n  const petalNoise = (n1 * (1 - blend) + n2 * blend - 0.5) * noise;\n\n  const base = outerRadius - ringIndex * ringGap;\n  const length = petalLength * (1 - ringIndex * 0.08);\n\n  const radius = base + petal * length + petalNoise;\n  const rotated = angle + (rotationDeg * Math.PI) / 180 + ringIndex * 0.08;\n\n  return [\n    centerX + Math.cos(rotated) * radius,\n    centerY + Math.sin(rotated) * radius\n  ];\n}\n\nfunction flowerPath(ringIndex) {\n  const count = petals * pointsPerPetal;\n  const points = Array.from({ length: count }, (_, i) =>\n    pointOnFlower((i / count) * Math.PI * 2, ringIndex)\n  );\n\n  const parts = [];\n\n  for (let i = 0; i < points.length; i += 1) {\n    const p0 = points[(i - 1 + points.length) % points.length];\n    const p1 = points[i];\n    const p2 = points[(i + 1) % points.length];\n    const p3 = points[(i + 2) % points.length];\n\n    if (i === 0) {\n      parts.push(`M ${p1[0]} ${p1[1]}`);\n    }\n\n    const c1 = [\n      p1[0] + (p2[0] - p0[0]) / 6,\n      p1[1] + (p2[1] - p0[1]) / 6\n    ];\n    const c2 = [\n      p2[0] - (p3[0] - p1[0]) / 6,\n      p2[1] - (p3[1] - p1[1]) / 6\n    ];\n\n    parts.push(`C ${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p2[0]} ${p2[1]}`);\n  }\n\n  parts.push('Z');\n  return parts.join(' ');\n}\n\nconst flowerContours = Array.from({ length: rings }, (_, i) =>\n  cad.fromSvgPathData(flowerPath(i), { bezierAccuracy: 0.5 })\n);\nconst centerHole = cad.circle(centerHoleRadius);\nconst contours = {};\n\nfor (let i = 0; i < flowerContours.length; i += 1) {\n  const nextContour = flowerContours[i + 1] ?? centerHole;\n  contours[`ring-${i + 1}`] = flowerContours[i].cut(nextContour);\n}\n\ncontours.center = centerHole;\n\nreturn cad.sketch(contours);"
+    ),
     [
-      [0, 18],
-      [46, 18],
-      [46, 0],
-      [94, 0],
-      [94, 34],
-      [60, 34],
-      [60, 68],
-      [112, 68]
-    ],
-    12
-  )
-  .translate(150, 136)
-  .onLayer('etch');
-
-const rabbit = cad
-  .fromSvgPathData(rabbitPath)
-  .scale(0.72)
-  .centerAt([262, 174])
-  .onLayer('cut');
-
-return cad.sketch({
-  board,
-  door,
-  clock,
-  maze,
-  rabbit
-});`
+      {
+        name: 'petals',
+        value: 14,
+        min: 1,
+        max: 40,
+        step: 1,
+      },
+      {
+        name: 'rings',
+        value: 3,
+        min: 1,
+        max: 10,
+        step: 1,
+      },
+      {
+        name: 'outerRadius',
+        value: 62,
+        min: 1,
+        max: 100,
+        step: 1,
+      },
+      {
+        name: 'petalLength',
+        value: 16,
+        min: 1,
+        max: 100,
+        step: 1,
+      },
+      {
+        name: 'petalWidth',
+        value: 0.8,
+        min: 0.01,
+        max: 5,
+        step: 0.01,
+      },
+      {
+        name: 'centerHoleRadius',
+        value: 10,
+        min: 1,
+        max: 30,
+        step: 1,
+      },
+      {
+        name: 'noise',
+        value: 5,
+        min: 1,
+        max: 20,
+        step: 1,
+      },
+      {
+        name: 'ringGap',
+        value: 18,
+        min: 1,
+        max: 30,
+        step: 1,
+      },
+      {
+        name: 'pointsPerPetal',
+        value: 6,
+        min: 1,
+        max: 20,
+        step: 1,
+      },
+      {
+        name: 'rotationDeg',
+        value: -8,
+        min: -90,
+        max: 90,
+        step: 1,
+      },
+    ]
   ),
 } as const satisfies Record<string, CadSnippet>;
 
