@@ -52,7 +52,7 @@ import {
 } from '@/lib/project-history/capture-scheduler';
 import { getProjectHistoryHotkeyAction } from '@/lib/project-history/hotkeys';
 import { createDxfExport, type DxfExportRequest } from '@/lib/export/dxf';
-import { createSvgExport } from '@/lib/export/svg';
+import { createSvgModelExport } from '@/lib/export/svg';
 import {
   createNestingRunReport,
   type NestingRunReport,
@@ -370,27 +370,28 @@ export const HomePage = () => {
     setIsExportDialogOpen(true);
   };
 
-  const handleExportSvg = useCallback(
-    (filenamePrefix: string) => {
-      try {
-        const result = createSvgExport({ svgString: svg, filenamePrefix });
+  const handleExportSvg = useCallback((request: DxfExportRequest) => {
+    try {
+      const result = createSvgModelExport(request);
 
-        downloadTextFile({
-          content: result.svg,
-          filename: result.filename,
-          type: 'image/svg+xml',
-        });
-        setIsExportDialogOpen(false);
-        toast.success('SVG exported');
-      } catch (nextError) {
-        console.error('SVG export error:', nextError);
-        toast.error(
-          nextError instanceof Error ? nextError.message : 'SVG export failed'
-        );
-      }
-    },
-    [svg]
-  );
+      downloadTextFile({
+        content: result.svg,
+        filename: result.filename,
+        type: 'image/svg+xml',
+      });
+      setIsExportDialogOpen(false);
+      toast.success(
+        `SVG exported (${result.validation?.selectedCount ?? 0} model${
+          result.validation?.selectedCount === 1 ? '' : 's'
+        })`
+      );
+    } catch (nextError) {
+      console.error('SVG export error:', nextError);
+      toast.error(
+        nextError instanceof Error ? nextError.message : 'SVG export failed'
+      );
+    }
+  }, []);
 
   const handleExportDxf = useCallback((request: DxfExportRequest) => {
     try {
@@ -1027,7 +1028,6 @@ export const HomePage = () => {
         model={model}
         models={availableModels}
         selectedModelId={selectedModelId}
-        svgString={svg}
         currentModelRevision={getModelRevision()}
         nestingExportContext={nestingExportContext}
         onOpenChange={setIsExportDialogOpen}
