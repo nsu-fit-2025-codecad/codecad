@@ -95,9 +95,9 @@ describe('normalizeEditorModelResult', () => {
 
     expect(Object.keys(model.models ?? {}).sort()).toEqual([
       'center',
-      'flower_1',
-      'flower_2',
-      'flower_3',
+      'ring-1',
+      'ring-2',
+      'ring-3',
     ]);
   });
 

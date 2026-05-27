@@ -279,14 +279,14 @@ describe('renderModelToSvg', () => {
     const model = createDefaultSceneFixture();
     const svg = renderModelToSvg(model);
 
-    ['center', 'flower_1', 'flower_2', 'flower_3'].forEach((modelId) => {
+    ['center', 'ring-1', 'ring-2', 'ring-3'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   });
 
   it('keeps default scene fills aligned after nesting', () => {
     const model = createDefaultSceneFixture();
-    const result = packModelsIntoTargetModel(model, 'flower_1', {
+    const result = packModelsIntoTargetModel(model, 'ring-1', {
       useGeneticSearch: false,
       allowRotation: true,
     });
@@ -295,7 +295,7 @@ describe('renderModelToSvg', () => {
 
     const svg = result!.svgString;
 
-    ['center', 'flower_1', 'flower_2', 'flower_3'].forEach((modelId) => {
+    ['center', 'ring-1', 'ring-2', 'ring-3'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   }, 15000);

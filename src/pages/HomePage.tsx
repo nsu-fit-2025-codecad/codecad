@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import makerjs, { IModel } from 'makerjs';
+import type { IModel } from 'makerjs';
 import { toast } from 'sonner';
 import { EditorErrorStatus } from '@/components/editor-error-status';
 import { ParametersPane } from '@/components/parameters-pane';
@@ -8,8 +8,6 @@ import {
   useEditorStore,
   useParametersStore,
 } from '@/store/store';
-import { cad, normalizeEditorModelResult } from '@/lib/cad';
-import { mapModelsToSizes } from '@/lib/geometry';
 import { useModelsStore } from '@/store/models-store';
 import { ModelsPane } from '@/components/models-pane';
 import {
@@ -22,7 +20,6 @@ import { WorkbenchLayout } from '@/components/workbench-layout';
 import { NestingTargetDialog } from '@/components/nesting-target-dialog';
 import { NestingStatus } from '@/components/nesting-status';
 import { useNestingController } from '@/lib/nesting/controller/use-nesting-controller';
-import { renderModelToSvg } from '@/lib/svg-render';
 import { MvpDemoPanel } from '@/components/mvp-demo-panel';
 import { ProjectLibraryDialog } from '@/components/project-library-dialog';
 import {
@@ -59,7 +56,6 @@ import {
 } from '@/lib/nesting/report';
 import {
   addEditorRecoverySnapshot,
-  createEditorEvaluationError,
   createEditorRecoverySnapshot,
   type EditorEvaluationError,
   type EditorRecoverySnapshot,
@@ -84,6 +80,10 @@ import {
   type LocalProjectRecord,
 } from '@/lib/project-library/local-projects';
 import { cn } from '@/lib/utils';
+import {
+  CAD_EVALUATION_CANCELLED_MESSAGE,
+  CadEvaluationWorkerClient,
+} from '@/lib/cad/worker';
 
 const AUTORUN_EVALUATION_DELAY_MS = 180;
 const CODE_HISTORY_CAPTURE_DELAY_MS = 600;
@@ -163,6 +163,7 @@ export const HomePage = () => {
   const [editorError, setEditorError] = useState<EditorEvaluationError | null>(
     null
   );
+  const [isRenderingCad, setIsRenderingCad] = useState(false);
   const [editorRecoverySnapshots, setEditorRecoverySnapshots] = useState<
     EditorRecoverySnapshot[]
   >([]);
@@ -172,6 +173,11 @@ export const HomePage = () => {
   });
   const modelRevisionRef = useRef(0);
   const projectHistoryRef = useRef<ProjectHistory | null>(null);
+  const cadEvaluationWorkerRef = useRef<CadEvaluationWorkerClient | null>(null);
+  const cadEvaluationSequenceRef = useRef(0);
+  const autorunEvaluationTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const isApplyingHistoryRef = useRef(false);
   const commitProjectSnapshotRef = useRef<() => void>(() => {});
   const codeHistorySchedulerRef = useRef<ProjectHistoryCaptureScheduler | null>(
@@ -189,9 +195,17 @@ export const HomePage = () => {
     });
   }
 
+  if (!cadEvaluationWorkerRef.current) {
+    cadEvaluationWorkerRef.current = new CadEvaluationWorkerClient();
+  }
+
   useEffect(
     () => () => {
       codeHistorySchedulerRef.current?.cancel();
+      if (autorunEvaluationTimeoutRef.current) {
+        clearTimeout(autorunEvaluationTimeoutRef.current);
+      }
+      cadEvaluationWorkerRef.current?.dispose();
     },
     []
   );
@@ -340,6 +354,15 @@ export const HomePage = () => {
     codeHistorySchedulerRef.current?.flush();
   }, []);
 
+  const clearScheduledAutorunEvaluation = useCallback(() => {
+    if (!autorunEvaluationTimeoutRef.current) {
+      return;
+    }
+
+    clearTimeout(autorunEvaluationTimeoutRef.current);
+    autorunEvaluationTimeoutRef.current = null;
+  }, []);
+
   const setTrackedNestingOptions = useCallback(
     (options: typeof nestingOptions) => {
       nestingOptionsRef.current = options;
@@ -349,7 +372,7 @@ export const HomePage = () => {
   );
 
   const evaluateSourceCode = useCallback(
-    (
+    async (
       sourceCode: string,
       runtimeParameters = useParametersStore.getState().parameters
     ) => {
@@ -357,29 +380,29 @@ export const HomePage = () => {
         return false;
       }
 
+      const worker = cadEvaluationWorkerRef.current;
+
+      if (!worker) {
+        return false;
+      }
+
+      cadEvaluationSequenceRef.current += 1;
+      const evaluationSequence = cadEvaluationSequenceRef.current;
+      setIsRenderingCad(true);
+
       try {
-        const createModel = new Function(
-          'makerjs',
-          'cad',
-          ...runtimeParameters.map((parameter) => parameter.name),
-          `return (function() {
-          ${sourceCode}
-        })();`
-        );
+        const result = await worker.run({
+          sourceCode,
+          parameters: runtimeParameters,
+        });
 
-        const executionResult = createModel(
-          makerjs,
-          cad,
-          ...runtimeParameters.map((parameter) => parameter.value)
-        );
-        const nextModel: IModel = normalizeEditorModelResult(executionResult);
-
-        setModel(nextModel);
-        if (nextModel.models) {
-          update(mapModelsToSizes(nextModel.models));
+        if (evaluationSequence !== cadEvaluationSequenceRef.current) {
+          return false;
         }
 
-        setSvg(renderModelToSvg(nextModel));
+        setModel(result.model);
+        update(result.modelSizes);
+        setSvg(result.svgString);
         bumpModelRevision();
         setEditorError(null);
         setEditorRecoverySnapshots((snapshots) =>
@@ -393,9 +416,28 @@ export const HomePage = () => {
         );
         return true;
       } catch (nextError) {
-        console.error('Error:', nextError);
-        setEditorError(createEditorEvaluationError(nextError));
+        const nextEvaluationError =
+          nextError &&
+          typeof nextError === 'object' &&
+          'message' in nextError &&
+          typeof nextError.message === 'string'
+            ? (nextError as EditorEvaluationError)
+            : { message: String(nextError) };
+
+        if (
+          nextEvaluationError.message === CAD_EVALUATION_CANCELLED_MESSAGE ||
+          evaluationSequence !== cadEvaluationSequenceRef.current
+        ) {
+          return false;
+        }
+
+        console.error('Error:', nextEvaluationError);
+        setEditorError(nextEvaluationError);
         return false;
+      } finally {
+        if (evaluationSequence === cadEvaluationSequenceRef.current) {
+          setIsRenderingCad(false);
+        }
       }
     },
     [bumpModelRevision, update]
@@ -458,18 +500,24 @@ export const HomePage = () => {
     }
   }, []);
 
-  const evalInput = useCallback(() => {
+  const evalInput = useCallback(async () => {
     if (!code) {
       return;
     }
 
     flushPendingCodeSnapshot();
-    const didEvaluate = evaluateSourceCode(code);
+    clearScheduledAutorunEvaluation();
+    const didEvaluate = await evaluateSourceCode(code);
 
     if (!didEvaluate) {
       toast.error('Code did not run. Showing the last valid preview.');
     }
-  }, [code, evaluateSourceCode, flushPendingCodeSnapshot]);
+  }, [
+    clearScheduledAutorunEvaluation,
+    code,
+    evaluateSourceCode,
+    flushPendingCodeSnapshot,
+  ]);
 
   const applyHistorySnapshot = useCallback(
     (snapshot: ProjectStateSnapshot) => {
@@ -680,19 +728,52 @@ export const HomePage = () => {
     [commitCurrentProjectSnapshot, editSettings, flushPendingCodeSnapshot]
   );
 
-  useEffect(() => {
-    if (!settings.autorun || !code) {
+  const evaluateCurrentProjectIfAutorun = useCallback(() => {
+    const editorState = useEditorStore.getState();
+
+    if (!editorState.settings.autorun || !editorState.code) {
       return;
     }
 
-    const timeoutId = setTimeout(() => {
-      evaluateSourceCode(code);
-    }, AUTORUN_EVALUATION_DELAY_MS);
+    void evaluateSourceCode(
+      editorState.code,
+      useParametersStore.getState().parameters
+    );
+  }, [evaluateSourceCode]);
 
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [code, evaluateSourceCode, settings.autorun]);
+  const scheduleCurrentProjectEvaluation = useCallback(
+    (delayMs = AUTORUN_EVALUATION_DELAY_MS) => {
+      clearScheduledAutorunEvaluation();
+
+      const editorState = useEditorStore.getState();
+
+      if (!editorState.settings.autorun || !editorState.code) {
+        cadEvaluationSequenceRef.current += 1;
+        cadEvaluationWorkerRef.current?.cancelRun();
+        setIsRenderingCad(false);
+        return;
+      }
+
+      cadEvaluationSequenceRef.current += 1;
+      cadEvaluationWorkerRef.current?.cancelRun();
+      setIsRenderingCad(true);
+
+      autorunEvaluationTimeoutRef.current = setTimeout(() => {
+        autorunEvaluationTimeoutRef.current = null;
+        evaluateCurrentProjectIfAutorun();
+      }, delayMs);
+    },
+    [clearScheduledAutorunEvaluation, evaluateCurrentProjectIfAutorun]
+  );
+
+  const flushCurrentProjectEvaluation = useCallback(() => {
+    clearScheduledAutorunEvaluation();
+    evaluateCurrentProjectIfAutorun();
+  }, [clearScheduledAutorunEvaluation, evaluateCurrentProjectIfAutorun]);
+
+  useEffect(() => {
+    scheduleCurrentProjectEvaluation();
+  }, [code, scheduleCurrentProjectEvaluation, settings.autorun]);
 
   useEffect(() => {
     const sharedState = readProjectStateFromUrl();
@@ -757,7 +838,7 @@ export const HomePage = () => {
       editCode(scene.code);
 
       if (!settings.autorun) {
-        evaluateSourceCode(scene.code, scene.parameters);
+        void evaluateSourceCode(scene.code, scene.parameters);
       }
 
       commitCurrentProjectSnapshot({
@@ -788,7 +869,7 @@ export const HomePage = () => {
       editCode(snippet.code);
 
       if (!settings.autorun) {
-        evaluateSourceCode(snippet.code, snippetParameters);
+        void evaluateSourceCode(snippet.code, snippetParameters);
       }
 
       commitCurrentProjectSnapshot({
@@ -849,38 +930,25 @@ export const HomePage = () => {
     flushPendingCodeSnapshot,
   ]);
 
-  const evaluateCurrentProjectIfAutorun = useCallback(() => {
-    const editorState = useEditorStore.getState();
-
-    if (!editorState.settings.autorun || !editorState.code) {
-      return;
-    }
-
-    evaluateSourceCode(
-      editorState.code,
-      useParametersStore.getState().parameters
-    );
-  }, [evaluateSourceCode]);
-
   const handleParameterValueChange = useCallback(
     (name: string, value: number) => {
       useParametersStore.getState().updateValue(name, value);
-      evaluateCurrentProjectIfAutorun();
+      scheduleCurrentProjectEvaluation();
     },
-    [evaluateCurrentProjectIfAutorun]
+    [scheduleCurrentProjectEvaluation]
   );
 
   const handleParameterCommit = useCallback(() => {
     commitCurrentProjectSnapshot();
-    evaluateCurrentProjectIfAutorun();
-  }, [commitCurrentProjectSnapshot, evaluateCurrentProjectIfAutorun]);
+    flushCurrentProjectEvaluation();
+  }, [commitCurrentProjectSnapshot, flushCurrentProjectEvaluation]);
 
   const restoreEditorSnapshot = useCallback(
     (snapshot: EditorRecoverySnapshot) => {
       flushPendingCodeSnapshot();
       replaceAllParameters(snapshot.parameters);
       editCode(snapshot.code);
-      evaluateSourceCode(snapshot.code, snapshot.parameters);
+      void evaluateSourceCode(snapshot.code, snapshot.parameters);
       commitCurrentProjectSnapshot({
         code: snapshot.code,
         parameters: snapshot.parameters,
@@ -903,7 +971,7 @@ export const HomePage = () => {
     flushPendingCodeSnapshot();
     replaceAllParameters(defaultParameters);
     editCode(DEFAULT_EDITOR_CODE);
-    evaluateSourceCode(DEFAULT_EDITOR_CODE, defaultParameters);
+    void evaluateSourceCode(DEFAULT_EDITOR_CODE, defaultParameters);
     commitCurrentProjectSnapshot({
       code: DEFAULT_EDITOR_CODE,
       parameters: defaultParameters,
@@ -1009,6 +1077,7 @@ export const HomePage = () => {
           isNestingRunning: isRunning,
         })}
         selectedModelId={selectedModelId}
+        isRendering={isRenderingCad}
         onExecuteCode={evalInput}
         onCodeChange={handleCodeChange}
         onAutorunChange={handleAutorunChange}
