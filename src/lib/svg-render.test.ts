@@ -1,6 +1,10 @@
 import makerjs, { IModel } from 'makerjs';
 import { describe, expect, it } from 'vitest';
 import { cad, normalizeEditorModelResult } from '@/lib/cad/runtime';
+import {
+  DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippetParameters,
+} from '@/lib/cad/snippets';
 import { packModelsIntoTargetModel } from '@/lib/nesting';
 import { DEFAULT_EDITOR_CODE } from '@/store/store';
 import {
@@ -53,15 +57,23 @@ const createMixedFixture = (): IModel => {
 };
 
 const createDefaultSceneFixture = (): IModel => {
+  const defaultParameters = getCadSnippetParameters(DEFAULT_EDITOR_SNIPPET_ID);
   const createModel = new Function(
     'makerjs',
     'cad',
+    ...defaultParameters.map((parameter) => parameter.name),
     `return (function () {
       ${DEFAULT_EDITOR_CODE}
     })();`
   );
 
-  return normalizeEditorModelResult(createModel(makerjs, cad));
+  return normalizeEditorModelResult(
+    createModel(
+      makerjs,
+      cad,
+      ...defaultParameters.map((parameter) => parameter.value)
+    )
+  );
 };
 
 const createTranslatedHelperFixture = (): IModel =>
@@ -267,14 +279,14 @@ describe('renderModelToSvg', () => {
     const model = createDefaultSceneFixture();
     const svg = renderModelToSvg(model);
 
-    ['board', 'clock', 'door', 'maze', 'rabbit'].forEach((modelId) => {
+    ['center', 'flower_1', 'flower_2', 'flower_3'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   });
 
   it('keeps default scene fills aligned after nesting', () => {
     const model = createDefaultSceneFixture();
-    const result = packModelsIntoTargetModel(model, 'board', {
+    const result = packModelsIntoTargetModel(model, 'flower_1', {
       useGeneticSearch: false,
       allowRotation: true,
     });
@@ -283,7 +295,7 @@ describe('renderModelToSvg', () => {
 
     const svg = result!.svgString;
 
-    ['board', 'clock', 'door', 'maze', 'rabbit'].forEach((modelId) => {
+    ['center', 'flower_1', 'flower_2', 'flower_3'].forEach((modelId) => {
       expectFillMatchesRootSvgCoordinates(svg, model, modelId);
     });
   }, 15000);

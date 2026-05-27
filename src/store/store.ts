@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_EDITOR_SNIPPET_ID, getCadSnippet } from '@/lib/cad/snippets';
+import {
+  DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippet,
+  getCadSnippetParameters,
+} from '@/lib/cad/snippets';
 
 export interface Parameter {
   name: string;
@@ -23,7 +27,7 @@ interface ParametersState {
 export const useParametersStore = create<ParametersState>()(
   persist(
     (set) => ({
-      parameters: [],
+      parameters: getCadSnippetParameters(DEFAULT_EDITOR_SNIPPET_ID),
       add: (parameter) =>
         set((state) => ({ parameters: [...state.parameters, parameter] })),
       edit: (name, updates) =>

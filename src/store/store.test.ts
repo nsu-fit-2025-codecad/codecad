@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_EDITOR_SNIPPET_ID,
+  getCadSnippetParameters,
+} from '@/lib/cad/snippets';
 import { useParametersStore } from '@/store/store';
 
 describe('useParametersStore', () => {
@@ -10,6 +14,12 @@ describe('useParametersStore', () => {
 
   afterEach(() => {
     consoleWarnSpy.mockClear();
+  });
+
+  it('starts fresh sessions with the default scene parameters', () => {
+    expect(useParametersStore.getInitialState().parameters).toEqual(
+      getCadSnippetParameters(DEFAULT_EDITOR_SNIPPET_ID)
+    );
   });
 
   it('replaces the entire parameter set for scene loads', () => {

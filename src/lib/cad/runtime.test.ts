@@ -74,23 +74,30 @@ describe('normalizeEditorModelResult', () => {
   });
 
   it('supports the default editor scene example', () => {
+    const defaultParameters = getCadSnippetParameters(
+      DEFAULT_EDITOR_SNIPPET_ID
+    );
     const createModel = new Function(
       'makerjs',
       'cad',
+      ...defaultParameters.map((parameter) => parameter.name),
       `return (function () {
         ${DEFAULT_EDITOR_CODE}
       })();`
     );
 
-    const evaluated = createModel(makerjs, cad);
+    const evaluated = createModel(
+      makerjs,
+      cad,
+      ...defaultParameters.map((parameter) => parameter.value)
+    );
     const model = normalizeEditorModelResult(evaluated);
 
     expect(Object.keys(model.models ?? {}).sort()).toEqual([
-      'board',
-      'clock',
-      'door',
-      'maze',
-      'rabbit',
+      'center',
+      'flower_1',
+      'flower_2',
+      'flower_3',
     ]);
   });
 
