@@ -17,6 +17,7 @@ import {
 interface WorkbenchLayoutProps {
   svgString: string;
   selectedModelId: string | null;
+  isRendering?: boolean;
   onExecuteCode: () => void;
   onCodeChange: (code?: string) => void;
   onAutorunChange: (autorun: boolean) => void;
@@ -54,6 +55,7 @@ const PaneRail = ({ label, onOpen, icon }: PaneRailProps) => (
 export const WorkbenchLayout = ({
   svgString,
   selectedModelId,
+  isRendering = false,
   onExecuteCode,
   onCodeChange,
   onAutorunChange,
@@ -143,6 +145,7 @@ export const WorkbenchLayout = ({
           <VisualizationArea
             svgString={svgString}
             selectedModelId={selectedModelId}
+            isRendering={isRendering}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

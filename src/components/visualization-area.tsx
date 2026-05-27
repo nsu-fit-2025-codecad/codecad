@@ -5,11 +5,13 @@ import { highlightSelectedModelInSvg } from '@/lib/svg-highlight';
 interface VisualizationAreaProps {
   svgString: string;
   selectedModelId: string | null;
+  isRendering?: boolean;
 }
 
 export const VisualizationArea = ({
   svgString,
   selectedModelId,
+  isRendering = false,
 }: VisualizationAreaProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const highlightedSvg = useMemo(
@@ -65,6 +67,11 @@ export const VisualizationArea = ({
         X: {Math.round(transform.x)} Y: {Math.round(transform.y)} Zoom:{' '}
         {Math.round(transform.scale * 100)}%
       </div>
+      {isRendering && (
+        <div className="absolute right-3 bottom-3 z-10 rounded border bg-card/90 px-2 py-1 text-xs text-card-foreground shadow-sm backdrop-blur">
+          Rendering...
+        </div>
+      )}
     </div>
   );
 };
