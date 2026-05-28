@@ -176,39 +176,51 @@ export const decodeProjectState = async (
   payload: string
 ): Promise<ProjectStateSnapshot | null> => {
   try {
-    const rawBytes = Uint8Array.from(
-      atob(
-        payload
-          .replaceAll('-', '+')
-          .replaceAll('_', '/')
-          .padEnd(Math.ceil(payload.length / 4) * 4, '=')
-      ),
-      (char) => char.charCodeAt(0)
-    );
+    // Безопасное декодирование Base64URL
+    let rawBytes: Uint8Array;
+    try {
+      rawBytes = Uint8Array.from(
+        atob(
+          payload
+            .replaceAll('-', '+')
+            .replaceAll('_', '/')
+            .padEnd(Math.ceil(payload.length / 4) * 4, '=')
+        ),
+        (char) => char.charCodeAt(0)
+      );
+    } catch {
+      // Некорректный Base64 — сразу null
+      return null;
+    }
 
     const formatVersion = rawBytes[0];
 
     if (formatVersion === PAYLOAD_FORMAT_VERSION) {
+      // Новый формат: распаковка + msgpack
       const compressed = rawBytes.slice(1);
       const decompressed = await decompress(compressed);
       const parsed = msgpackDecode(decompressed) as unknown;
       return parseProjectStateSnapshot(parsed);
-    } else if (formatVersion === 1 || formatVersion === undefined) {
-      const jsonStr = decodeBase64Url(payload);
-      const parsedJson: unknown = JSON.parse(jsonStr);
-      return parseProjectStateSnapshot(parsedJson);
+    }
+    // Старый формат (версия 1 или отсутствует)
+    else if (
+      formatVersion === 1 ||
+      formatVersion === undefined ||
+      formatVersion === 0
+    ) {
+      try {
+        const jsonStr = decodeBase64Url(payload);
+        const parsedJson: unknown = JSON.parse(jsonStr);
+        return parseProjectStateSnapshot(parsedJson);
+      } catch {
+        return null;
+      }
     }
 
     return null;
   } catch (err) {
-    console.error('[decodeProjectState] error, trying fallback:', err);
-    try {
-      const jsonStr = decodeBase64Url(payload);
-      const parsedJson: unknown = JSON.parse(jsonStr);
-      return parseProjectStateSnapshot(parsedJson);
-    } catch {
-      return null;
-    }
+    console.error('[decodeProjectState] unexpected error:', err);
+    return null;
   }
 };
 
