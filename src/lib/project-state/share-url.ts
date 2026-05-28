@@ -3,8 +3,10 @@ import {
   decode as msgpackDecode,
 } from '@msgpack/msgpack';
 import {
+  PROJECT_STATE_VERSION,
   createProjectStateSnapshot,
   parseProjectStateSnapshot,
+  projectStateInputSchema,
   type ProjectStateInput,
   type ProjectStateSnapshot,
 } from '@/lib/project-state/contract';
@@ -176,7 +178,6 @@ export const decodeProjectState = async (
   payload: string
 ): Promise<ProjectStateSnapshot | null> => {
   try {
-    // Безопасное декодирование Base64URL
     let rawBytes: Uint8Array;
     try {
       rawBytes = Uint8Array.from(
@@ -189,35 +190,62 @@ export const decodeProjectState = async (
         (char) => char.charCodeAt(0)
       );
     } catch {
-      // Некорректный Base64 — сразу null
       return null;
     }
 
     const formatVersion = rawBytes[0];
 
     if (formatVersion === PAYLOAD_FORMAT_VERSION) {
-      // Новый формат: распаковка + msgpack
+      // === НОВЫЙ ФОРМАТ: добавляем логи ===
+      console.log('[decode:NEW] payload length:', payload.length);
+      console.log('[decode:NEW] rawBytes length:', rawBytes.length);
+
       const compressed = rawBytes.slice(1);
+      console.log('[decode:NEW] compressed length:', compressed.length);
+
       const decompressed = await decompress(compressed);
+      console.log('[decode:NEW] decompressed length:', decompressed.length);
+      console.log(
+        '[decode:NEW] decompressed (first 50 bytes):',
+        Array.from(decompressed.slice(0, 50))
+      );
+
       const parsed = msgpackDecode(decompressed) as unknown;
-      return parseProjectStateSnapshot(parsed);
-    }
-    // Старый формат (версия 1 или отсутствует)
-    else if (
-      formatVersion === 1 ||
-      formatVersion === undefined ||
-      formatVersion === 0
-    ) {
+      console.log('[decode:NEW] msgpackDecode result type:', typeof parsed);
+      console.log('[decode:NEW] msgpackDecode result:', parsed);
+
+      const cleaned = replaceNullWithUndefined(parsed);
+
+      const validated = parseProjectStateSnapshot(cleaned);
+      console.log(
+        '[decode:NEW] Zod validation result:',
+        validated ? '✓ valid' : '✗ null'
+      );
+
+      return validated;
+      // === Конец логов ===
+    } else {
+      // Старый формат
       try {
         const jsonStr = decodeBase64Url(payload);
         const parsedJson: unknown = JSON.parse(jsonStr);
-        return parseProjectStateSnapshot(parsedJson);
+
+        if (typeof parsedJson === 'object' && parsedJson !== null) {
+          // Проверяем версию через 'in' — надёжнее, чем ?.version
+          if (
+            'version' in parsedJson &&
+            parsedJson.version !== PROJECT_STATE_VERSION
+          ) {
+            return null;
+          }
+        }
+
+        const result = projectStateInputSchema.safeParse(parsedJson);
+        return result.success ? result.data : null;
       } catch {
         return null;
       }
     }
-
-    return null;
   } catch (err) {
     console.error('[decodeProjectState] unexpected error:', err);
     return null;
@@ -249,4 +277,18 @@ export const removeProjectStateFromUrl = (href = window.location.href) => {
   const url = new URL(href);
   url.searchParams.delete(PROJECT_STATE_QUERY_PARAM);
   return `${url.pathname}${url.search}${url.hash}`;
+};
+
+// === Вспомогательная функция: null → undefined (рекурсивно) ===
+const replaceNullWithUndefined = (value: unknown): unknown => {
+  if (value === null) return undefined;
+  if (Array.isArray(value)) return value.map(replaceNullWithUndefined);
+  if (typeof value === 'object' && value !== null) {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      result[key] = replaceNullWithUndefined(val);
+    }
+    return result;
+  }
+  return value;
 };

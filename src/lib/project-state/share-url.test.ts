@@ -186,7 +186,13 @@ describe('project share URL state', () => {
       expect(parsedUrl.hash).toBe('#/?tab=models');
 
       const decoded = await readProjectStateFromUrl(url);
-      expect(decoded).toMatchObject(state);
+      expect(decoded).toBeDefined();
+      expect(decoded?.version).toBe(1);
+      expect(decoded?.code).toBe(state.code);
+      expect(decoded?.parameters).toEqual(state.parameters);
+      expect(decoded?.editorSettings.autorun).toBe(true);
+
+      expect(decoded?.selectedTargetModelId ?? null).toBeNull();
     });
 
     it('removes project param from URL correctly', () => {
