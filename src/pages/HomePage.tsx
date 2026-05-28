@@ -776,46 +776,51 @@ export const HomePage = () => {
   }, [code, scheduleCurrentProjectEvaluation, settings.autorun]);
 
   useEffect(() => {
-    const sharedState = readProjectStateFromUrl();
+    const loadSharedState = async () => {
+      const sharedState = await readProjectStateFromUrl();
 
-    projectHistoryRef.current?.push(createCurrentProjectSnapshot());
+      projectHistoryRef.current?.push(createCurrentProjectSnapshot());
 
-    if (sharedState) {
-      applyHistorySnapshot(sharedState);
-      projectHistoryRef.current?.push(sharedState);
+      if (sharedState) {
+        applyHistorySnapshot(sharedState);
+        projectHistoryRef.current?.push(sharedState);
 
-      window.history.replaceState(
-        null,
-        '',
-        removeProjectStateFromUrl(window.location.href)
-      );
-    }
+        window.history.replaceState(
+          null,
+          '',
+          removeProjectStateFromUrl(window.location.href)
+        );
+      }
 
-    updateProjectHistoryAvailability();
-    // Import runs once on mount; the URL cleanup prevents StrictMode remounts
-    // from applying the same share payload twice.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      updateProjectHistoryAvailability();
+    };
+
+    void loadSharedState();
+  }, [
+    applyHistorySnapshot,
+    createCurrentProjectSnapshot,
+    updateProjectHistoryAvailability,
+  ]);
 
   const copyShareUrl = useCallback(async () => {
-    flushPendingCodeSnapshot();
-
-    const shareUrl = createProjectShareUrl({
-      code: code ?? '',
-      parameters,
-      editorSettings: {
-        autorun: settings.autorun,
-      },
-      nestingOptions,
-      selectedTargetModelId: selectedModelId,
-    });
-
     try {
+      flushPendingCodeSnapshot();
+
+      const shareUrl = await createProjectShareUrl({
+        code: code ?? '',
+        parameters,
+        editorSettings: { autorun: settings.autorun },
+        nestingOptions,
+        selectedTargetModelId: selectedModelId,
+      });
+
       await navigator.clipboard.writeText(shareUrl);
       toast.success('Share URL copied');
     } catch (nextError) {
       console.error('Failed to copy share URL:', nextError);
-      toast.error('Could not copy Share URL');
+      toast.error(
+        `Could not copy: ${nextError instanceof Error ? nextError.message : String(nextError)}`
+      );
     }
   }, [
     code,

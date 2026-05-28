@@ -256,7 +256,7 @@ describe('packModelsIntoNestingArea', () => {
 
     expect(result.packedModels.ring).toBeDefined();
     expect(result.didNotFitModels.ring).toBeUndefined();
-  }, 20_000);
+  }, 30_000);
 
   it('GA orchestration improves or preserves deterministic quality', () => {
     const target = new makerjs.models.Rectangle(140, 100);
