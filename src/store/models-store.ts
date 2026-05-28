@@ -17,11 +17,15 @@ interface ModelsState {
   updateFitStatus: (packedIds: Set<string>, notFitIds: Set<string>) => void;
   selectModel: (modelId: string) => void;
   clearSelectedModel: () => void;
+  hoveredModelId: string | null;
+  setHoveredModelId: (id: string | null) => void;
 }
 
 export const useModelsStore = create<ModelsState>()((set) => ({
   models: [],
   selectedModelId: null,
+  hoveredModelId: null,
+  setHoveredModelId: (id) => set({ hoveredModelId: id }),
   update: (models) =>
     set((state) => ({
       models,

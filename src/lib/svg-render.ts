@@ -109,7 +109,7 @@ const createTopLevelOutlineMarkup = (
     return `<g id="${escapeAttributeValue(modelId)}"></g>`;
   }
 
-  return `<g id="${escapeAttributeValue(modelId)}"><path d="${escapeAttributeValue(pathData)}" vector-effect="non-scaling-stroke"/></g>`;
+  return `<g id="${escapeAttributeValue(modelId)}"><path d="${escapeAttributeValue(pathData)}" vector-effect="non-scaling-stroke" fill="transparent"/></g>`;
 };
 
 const buildModelFillLayers = (
